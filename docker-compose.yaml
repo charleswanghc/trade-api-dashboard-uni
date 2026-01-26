@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: shioaji
+      POSTGRES_DB: trade_api
       PGHOST: db
       PGPASSWORD: postgres
       MIGRATIONS_DIR: /db/migrations
@@ -25,25 +25,17 @@ services:
     env_file:
       - .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/shioaji
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/trade_api
     volumes:
       # Mount source code for live updates (no rebuild needed)
       - ./main.py:/app/main.py:ro
-      - ./trading.py:/app/trading.py:ro
-      - ./trading_queue.py:/app/trading_queue.py:ro
       - ./database.py:/app/database.py:ro
       - ./models.py:/app/models.py:ro
-      - ./static:/app/static:ro
       # Mount CA certificate for real trading
       - ./certs:/app/certs:ro
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      trading-worker:
-        condition: service_started
       db-migrate:
         condition: service_completed_successfully
     restart: unless-stopped
@@ -96,51 +88,20 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  trading-worker:
-    build: .
-    command: python trading_worker.py
-    env_file:
-      - .env
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      # Mount source code for live updates (no rebuild needed)
-      - ./trading_worker.py:/app/trading_worker.py:ro
-      - ./trading.py:/app/trading.py:ro
-      - ./trading_queue.py:/app/trading_queue.py:ro
-      # Mount CA certificate for real trading
-      - ./certs:/app/certs:ro
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: shioaji
+      POSTGRES_DB: trade_api
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d shioaji"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d trade_api"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
   postgres_data:
-  redis_data:

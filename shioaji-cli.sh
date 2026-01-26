@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Shioaji Auto-Trading CLI
+# Unitrade Auto-Trading CLI
 # A user-friendly command-line interface for managing the trading system
 #
 # Usage: ./shioaji-cli.sh [command]
@@ -17,13 +17,13 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Project name (for docker volume names)
-PROJECT_NAME="shioaji-api-dashboard"
+PROJECT_NAME="trade-api-dashboard-uni"
 
 # Print colored output
 print_header() {
     echo ""
     echo -e "${CYAN}════════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}  📈 Shioaji Auto-Trading System${NC}"
+    echo -e "${CYAN}  📈 Unitrade Auto-Trading System${NC}"
     echo -e "${CYAN}════════════════════════════════════════════════════════════${NC}"
     echo ""
 }
@@ -69,7 +69,7 @@ show_help() {
     echo -e "  ${GREEN}status${NC}       Show service status"
     echo -e "  ${GREEN}logs${NC}         Show all logs (follow mode)"
     echo -e "  ${GREEN}logs-api${NC}     Show API logs only"
-    echo -e "  ${GREEN}logs-worker${NC}  Show Trading Worker logs only"
+    echo -e "  ${GREEN}logs-worker${NC}  (已移除)"
     echo -e "  ${GREEN}health${NC}       Check system health"
     echo -e "  ${GREEN}dashboard${NC}    Open dashboard in browser"
     echo -e "  ${GREEN}reset${NC}        Reset database (DELETE ALL DATA)"
@@ -93,7 +93,7 @@ cmd_start() {
     echo ""
     print_success "Services started!"
     echo ""
-    echo "Dashboard: http://localhost:9879/dashboard"
+    echo "Dashboard: http://localhost:4200"
     echo "API Docs:  http://localhost:9879/docs"
     echo ""
     print_info "Waiting for services to be ready..."
@@ -149,11 +149,10 @@ cmd_logs_api() {
 }
 
 # Show worker logs
+# trading-worker 已移除
 cmd_logs_worker() {
     print_header
-    print_info "Showing Trading Worker logs (Ctrl+C to exit)..."
-    echo ""
-    docker compose logs -f trading-worker
+    print_warning "Trading Worker 已移除"
 }
 
 # Health check (quiet version)
@@ -165,27 +164,17 @@ cmd_health_quiet() {
     while [ $attempt -le $max_attempts ]; do
         response=$(curl -s "$health_url" 2>/dev/null || echo "")
         if [ -n "$response" ]; then
-            api_status=$(echo "$response" | grep -o '"api":"[^"]*"' | cut -d'"' -f4)
-            worker_status=$(echo "$response" | grep -o '"trading_worker":"[^"]*"' | cut -d'"' -f4)
-            redis_status=$(echo "$response" | grep -o '"redis":"[^"]*"' | cut -d'"' -f4)
+            api_status=$(echo "$response" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+            unitrade_status=$(echo "$response" | grep -o '"unitrade":"[^"]*"' | cut -d'"' -f4)
             
             echo ""
             echo "System Health:"
-            if [ "$api_status" = "healthy" ]; then
-                echo -e "  API:            ${GREEN}● healthy${NC}"
+            if [ "$api_status" = "ok" ]; then
+                echo -e "  API:            ${GREEN}● ok${NC}"
             else
                 echo -e "  API:            ${RED}● $api_status${NC}"
             fi
-            if [ "$worker_status" = "healthy" ]; then
-                echo -e "  Trading Worker: ${GREEN}● healthy${NC}"
-            else
-                echo -e "  Trading Worker: ${YELLOW}● $worker_status${NC}"
-            fi
-            if [ "$redis_status" = "connected" ]; then
-                echo -e "  Redis:          ${GREEN}● connected${NC}"
-            else
-                echo -e "  Redis:          ${RED}● $redis_status${NC}"
-            fi
+            echo -e "  Unitrade:       ${YELLOW}● $unitrade_status${NC}"
             echo ""
             return 0
         fi
@@ -206,7 +195,7 @@ cmd_health() {
 
 # Open dashboard
 cmd_dashboard() {
-    local url="http://localhost:9879/dashboard"
+    local url="http://localhost:4200"
     print_header
     print_info "Opening dashboard..."
     echo ""
@@ -232,8 +221,7 @@ cmd_reset() {
     echo "This will:"
     echo "  1. Stop all services"
     echo "  2. Delete all order history"
-    echo "  3. Delete Redis cache"
-    echo "  4. Restart with fresh database"
+    echo "  3. Restart with fresh database"
     echo ""
     print_error "ALL DATA WILL BE PERMANENTLY DELETED!"
     echo ""
@@ -252,7 +240,6 @@ cmd_reset() {
     echo ""
     print_info "Removing data volumes..."
     docker volume rm ${PROJECT_NAME}_postgres_data 2>/dev/null || true
-    docker volume rm ${PROJECT_NAME}_redis_data 2>/dev/null || true
     
     echo ""
     print_info "Starting services with fresh database..."

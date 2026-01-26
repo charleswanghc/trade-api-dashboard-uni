@@ -1,530 +1,202 @@
-# 📈 Shioaji Auto-Trading API
+# TradingView × Unitrade 自動交易系統
 
-基於 [Shioaji](https://sinotrade.github.io/) 的自動交易 API 服務，可自動執行台灣期貨交易。
+此專案將原本的 Shioaji 架構改為 **Angular 前端 + FastAPI 後端**，並使用 **統一期貨 Unitrade 官方 Python API** 進行下單。
 
-**適用於任何能執行交易策略的環境**，包括但不限於：
-- 📺 TradingView (Webhook)
-- 🐍 Python (Backtrader, Zipline, VectorBT, 自訂策略)
-- 📊 任何能取得 OHLCV 資料並發送 HTTP 請求的系統
+## 🔗 官方資源
 
-<p align="center">
-  <img src="docs/images/dashboard-orders.png" alt="委託紀錄" width="100%">
-</p>
+- Unitrade 官方文件：https://pfcec.github.io/unitrade/
+- Unitrade 快速開始：https://pfcec.github.io/unitrade/開始/
+- Unitrade API 參考：https://pfcec.github.io/unitrade/API/
+- Unitrade 教學 Notebook：https://colab.research.google.com/github/PFCEC/unitrade/blob/main/教學/sample/unitrade_Demo.ipynb
 
-## ✨ 功能特色
+## ✅ 功能目標
 
-- 🔗 **通用 REST API** - 支援任何能發送 HTTP 請求的交易策略環境
-- 📺 **TradingView 整合** - 原生支援 Webhook，直接接收警報自動下單
-- 🌐 **內建 HTTPS 隧道** - 透過 NGROK 自動提供公開 HTTPS URL，無需設定 SSL 憑證
-- 🛡️ **IP 白名單** - NGINX 反向代理支援 IP 過濾，保護 API 端點
-- 🪟 **Windows 原生支援** - 直接使用 Docker Desktop 運行，無需 WSL
-- 🔄 **自動重連機制** - Token 過期或連線錯誤時自動重試（最多 3 次）
-- 📊 **Web 控制台** - 美觀的中文介面，查看委託紀錄、持倉狀態
-- 🐳 **Docker 一鍵部署** - 包含 NGINX、NGROK、PostgreSQL、Redis 完整架構
-- 🔐 **API 金鑰驗證** - 保護敏感端點
-- 📜 **商品查詢** - 查看所有可交易的期貨商品代碼
-- 🔌 **Redis 訊息佇列** - 單一連線架構，避免 "Too Many Connections" 問題
+- TradingView Webhook 自動下單
+- Angular 18+ Dashboard（SPA）
+- FastAPI 後端 API
+- Unitrade API 下單
+- 可部署至 Azure / Google Cloud（Linux 環境）
 
-## 🏗️ 系統架構
+## 🧱 系統架構
 
 ```
-┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│   TradingView   │ ───► │      NGROK      │ ───► │      NGINX      │ ───► │   FastAPI App   │
-│    Webhook      │      │  (HTTPS Tunnel) │      │  (Reverse Proxy)│      │   (Port 8000)   │
-└─────────────────┘      └─────────────────┘      └────────┬────────┘      └───────┬─────────┘
-                                                          │                        │
-                                                   IP Whitelist            ┌───────┴───────┐
-                                                   Rate Limiting           ▼               ▼
-                                                                  ┌─────────────┐  ┌─────────────┐
-                                                                  │    Redis    │  │ PostgreSQL  │
-                                                                  │   (Queue)   │  │  (Orders)   │
-                                                                  └──────┬──────┘  └─────────────┘
-                                                                         │
-                                                                         ▼
-                                                                  ┌─────────────┐
-                                                                  │   Trading   │
-                                                                  │   Worker    │
-                                                                  └──────┬──────┘
-                                                                         │
-                                                                         ▼
-                                                                  ┌─────────────┐
-                                                                  │   Shioaji   │
-                                                                  │  (SinoPac)  │
-                                                                  └─────────────┘
+TradingView Alert
+    → HTTPS Webhook
+    → FastAPI
+    → Unitrade API
+    → 統一期貨下單
+
+Angular SPA → REST API → FastAPI
 ```
 
-### 元件說明
+## 📦 目錄結構（重點）
 
-| 元件 | 說明 |
-|------|------|
-| **NGROK** | HTTPS 隧道服務，自動處理 SSL 憑證，提供公開 URL |
-| **NGINX** | 反向代理，IP 白名單過濾、速率限制、安全標頭 |
-| **FastAPI App** | 處理 HTTP 請求的 API 服務，支援多 worker 擴展 |
-| **Redis** | 訊息佇列，用於 API 與 Trading Worker 之間的通訊 |
-| **Trading Worker** | 專用的交易服務，維護單一 Shioaji 連線，自動重連 |
-| **PostgreSQL** | 儲存訂單歷史紀錄 |
-
-## 🚀 快速開始
-
-### 系統需求
-
-| 需求 | 說明 |
-|------|------|
-| **作業系統** | Linux、macOS、或 Windows（支援原生 Docker，無需 WSL） |
-| **Docker** | Docker Desktop 或 Docker Engine 20.10+ 與 Docker Compose V2 |
-| **永豐金帳戶** | 需申請 Shioaji API 金鑰 |
-
-> ✅ **Windows 原生支援：** 本系統可直接在 Windows 上使用 Docker Desktop 運行，無需 WSL！只需執行 `docker compose up` 即可啟動所有服務。
-
-### 1. 複製專案
-
-```bash
-git clone <your-repo-url>
-cd shioaji-api-dashboard
+```
+trade-api-dashboard-uni/
+├── main.py                  # FastAPI 後端
+├── unitrade_client.py       # Unitrade 登入/下單
+├── database.py              # DB 連線
+├── models.py                # 訂單資料表
+├── db/                      # SQL migrations
+├── frontend/                # Angular 前端
+└── docker-compose.yaml      # Docker 編排
 ```
 
-### 2. 設定環境變數
+## ⚙️ 環境變數
 
-```bash
+複製範例檔案：
+
+```
 cp example.env .env
 ```
 
-編輯 `.env` 檔案：
+重點欄位（詳見 [example.env](example.env)）：
 
-```env
-# Shioaji API 金鑰 (從永豐金證券取得)
-API_KEY=your_shioaji_api_key_here
-SECRET_KEY=your_shioaji_secret_key_here
+- `UNITRADE_WS_URL`
+- `UNITRADE_ACCOUNT`
+- `UNITRADE_PASSWORD`
+- `UNITRADE_CERT_FILE`
+- `UNITRADE_CERT_PASSWORD`
+- `UNITRADE_ACTNO`
 
-# 控制台驗證金鑰 (自訂一個安全的密碼)
-AUTH_KEY=your_secure_auth_key_here
+憑證與帳號放置位置請參考：[docs/credentials.md](docs/credentials.md)
 
-# 支援的期貨商品 (可選，預設為 MXF,TXF)
-SUPPORTED_FUTURES=MXF,TXF
+## 🚀 後端（FastAPI）
 
-# CA 憑證 (僅實盤交易需要)
-CA_PATH=/app/certs/Sinopac.pfx
-CA_PASSWORD=your_ca_password_here
+### API 端點
 
-# NGROK 設定 (用於公開 HTTPS URL)
-NGROK_AUTHTOKEN=your_ngrok_auth_token_here
-#NGROK_DOMAIN=your-custom-domain.ngrok.app  # 可選，付費方案才需要
+| 方法 | 路徑 | 用途 |
+|------|------|------|
+| POST | /webhook | TradingView Webhook 下單 |
+| POST | /order | Angular 手動下單 |
+| GET | /health | 健康檢查 |
+| GET | /orders | 訂單列表（簡易） |
 
-# IP 白名單 (可選，預設允許所有 IP)
-ALLOWED_IPS=0.0.0.0/0
-```
+### Webhook 範例（DOrderObject 參數）
 
-> 💡 **注意：** 資料庫連線設定 (DATABASE_URL, POSTGRES_*) 已在 docker-compose.yaml 中預設，無需手動設定。
-
-### 3. 啟動服務
-
-**Linux/macOS：**
-```bash
-./shioaji-cli.sh start
-```
-
-**Windows (PowerShell/CMD)：**
-```bash
-docker compose up -d
-```
-
-### 4. 開啟控制台
-
-瀏覽器開啟 http://localhost:9879/dashboard
-
-或使用指令自動開啟：
-```bash
-./shioaji-cli.sh dashboard
-```
-
-### 5. 檢查服務狀態
-
-```bash
-./shioaji-cli.sh health
-```
-
-預期回應：
 ```json
 {
-  "api": "healthy",
-  "trading_worker": "healthy",
-  "redis": "connected"
+  "actno": "1234567",
+  "subactno": "",
+  "productid": "TXFF5",
+  "bs": "B",
+  "ordertype": "L",
+  "price": 17850,
+  "orderqty": 1,
+  "ordercondition": "R",
+  "opencloseflag": "",
+  "dtrade": "N",
+  "note": "TV",
+  "strategy": "EMA_CROSS"
 }
 ```
 
-## 📖 API 文件
+### 下單欄位重點
 
-完整 API 端點說明請參考 **FastAPI 自動產生文件**：
+- `productid`：商品代碼（內期）
+- `bs`：B=買進，S=賣出
+- `ordertype`：L=限價，M=市價，P=範圍市價
+- `ordercondition`：R=ROD，I=IOC，F=FOK
+- `opencloseflag`：空白=自動，0=新倉，1=平倉
+- `dtrade`：Y=當沖，N=非當沖
+- `note`：限 10 碼非中文
+
+### 手動下單範例
+
+```json
+{
+  "actno": "1234567",
+  "productid": "TXFF5",
+  "bs": "S",
+  "ordertype": "L",
+  "price": 17820,
+  "orderqty": 1,
+  "ordercondition": "R",
+  "opencloseflag": "",
+  "dtrade": "N",
+  "note": "Manual",
+  "strategy": "Manual"
+}
+```
+
+## 🧭 前端（Angular）
+
+前端位於 [frontend/](frontend/)：
+
+- Angular 18+
+- Reactive Forms
+- HttpClient
+- SPA Router
+
+頁面模組：Dashboard / Orders / Positions / Trades / Alerts
+
+> Dashboard UI 以原本的 [static/dashboard.html](static/dashboard.html) 為重寫參考。
+
+### 前端啟動
+
+```
+cd frontend
+npm install
+npm start
+```
+
+預設 Dashboard：
+
+```
+http://localhost:4200
+```
+
+## 🐳 Docker（後端 + DB）
+
+```
+docker compose up -d
+```
+
+FastAPI Swagger：
 
 ```
 http://localhost:9879/docs
 ```
 
-或使用 NGROK 公開 URL：
+## ✅ 驗證流程（Webhook → 下單 → 畫面顯示）
+
+1. 啟動後端與前端
+2. TradingView Webhook 指向 `http(s)://<domain>/webhook`
+3. Webhook 送出下單 JSON
+4. 後端寫入資料庫（source=webhook）
+5. 前端 Orders 頁面會顯示最新訂單（含 source）
+
+快速測試（以本機為例）：
 
 ```
-https://your-ngrok-url.ngrok-free.dev/docs
+curl -X POST http://localhost:9879/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"actno":"1234567","productid":"TXFF5","bs":"B","ordertype":"L","price":17850,"orderqty":1,"ordercondition":"R","opencloseflag":"","dtrade":"N","note":"TV"}'
 ```
 
-> 💡 FastAPI 提供互動式 Swagger UI，可直接測試所有 API 端點。
+## ☁️ 部署（參考）
 
-## 🌐 NGROK 公開 URL 設定
-
-系統內建 NGROK 服務，自動提供 HTTPS URL，無需手動設定 SSL 憑證或網域！
-
-### 設定步驟
-
-1. **註冊 NGROK 帳號**（免費）：https://dashboard.ngrok.com/signup
-2. **取得 Auth Token**：https://dashboard.ngrok.com/get-started/your-authtoken
-3. **設定環境變數**：在 `.env` 檔案中填入 `NGROK_AUTHTOKEN`
-
-> ⚠️ **必須註冊**：NGROK 需要 Auth Token 才能建立隧道，請先完成註冊。
-
-### 取得公開 URL
-
-啟動服務後，訪問 NGROK 狀態頁面：
+### Dockerfile
 
 ```
-http://localhost:4040/status
+FROM python:3.11
+WORKDIR /app
+COPY . .
+RUN pip install -r requirements.txt
+CMD uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-找到 **Tunnels → command_line → URL** 欄位，即為公開 HTTPS URL。
+### 雲端
 
-例如：`https://***.ngrok-free.dev`
+- Azure App Service（Linux + Docker）
+- Azure Container Apps
+- Google Cloud Run
+- Google Compute Engine（Linux VM）
 
-其他方式：
+Azure 部署細節請見：[docs/azure-deploy.md](docs/azure-deploy.md)
 
-```bash
-# 查看 Docker 日誌
-docker compose logs ngrok | grep "started tunnel"
+## 📌 注意事項
 
-# 使用 NGROK API
-curl -s http://localhost:4040/api/tunnels | jq '.tunnels[0].public_url'
-```
-
-### 自訂網域（付費方案）
-
-如果使用付費方案，可設定固定網域，避免每次重啟 URL 變動：
-
-```env
-NGROK_DOMAIN=your-custom-domain.ngrok.app
-```
-
-## 🛡️ IP 白名單設定
-
-NGINX 支援 IP 白名單過濾，只允許指定 IP 存取 API：
-
-```env
-# 允許所有 IP（預設）
-ALLOWED_IPS=0.0.0.0/0
-
-# 只允許特定 IP
-ALLOWED_IPS=203.0.113.50
-
-# 允許多個 IP 或 CIDR 範圍
-ALLOWED_IPS=203.0.113.50,198.51.100.0/24,10.0.0.0/8
-```
-
-## 🔗 TradingView 設定
-
-<p align="center">
-  <img src="docs/images/dashboard-webhook.png" alt="TradingView 設定指南" width="100%">
-</p>
-
-### 1. Webhook URL
-
-使用 NGROK 提供的公開 HTTPS URL（從 http://localhost:4040 取得）：
-
-**模擬模式（測試用）：**
-```
-https://your-ngrok-url.ngrok-free.app/order
-```
-
-**實盤模式：**
-```
-https://your-ngrok-url.ngrok-free.app/order?simulation=false
-```
-
-> 💡 **注意：** TradingView Webhook 要求 HTTPS URL，系統已透過 NGROK 自動處理！
-
-### 2. Webhook 訊息格式
-
-```json
-{
-    "action": "{{strategy.order.alert_message}}",
-    "symbol": "MXF202601",
-    "quantity": {{strategy.order.contracts}}
-}
-```
-
-### 3. Pine Script 範例
-
-```pinescript
-//@version=5
-strategy("My Strategy", overlay=true)
-
-// 你的策略邏輯...
-if (買入條件)
-    strategy.entry("Long", strategy.long, alert_message="long_entry")
-
-if (賣出條件)
-    strategy.close("Long", alert_message="long_exit")
-```
-
-### 4. 可用的 Action 值
-
-| Action | 說明 |
-|--------|------|
-| `long_entry` | 做多進場 |
-| `long_exit` | 做多出場 |
-| `short_entry` | 做空進場 |
-| `short_exit` | 做空出場 |
-
-## 🔐 實盤交易設定
-
-實盤交易需要 CA 憑證認證：
-
-### 1. 取得 CA 憑證
-
-從永豐金證券下載您的 `Sinopac.pfx` 憑證檔案。
-
-### 2. 放置憑證
-
-```bash
-mkdir certs
-cp /path/to/Sinopac.pfx ./certs/
-```
-
-### 3. 設定環境變數
-
-```env
-CA_PATH=/app/certs/Sinopac.pfx
-CA_PASSWORD=您的憑證密碼
-```
-
-> ⚠️ **注意：** `person_id`（身分證字號）會自動從您的帳戶取得，無需手動設定。
-
-## 📊 控制台功能
-
-Web 控制台提供以下分頁：
-
-### 📋 委託紀錄
-- 查看所有訂單歷史
-- 依狀態、動作、商品篩選
-- 手動重新查詢訂單狀態
-- 匯出 CSV
-
-### 💼 目前持倉
-- 查看目前期貨持倉
-- 顯示未實現損益
-
-### 📜 可用商品
-- 瀏覽所有可交易的商品代碼
-- 搜尋功能
-- 點擊複製商品代碼
-
-### 🔗 TradingView 設定
-- Webhook URL 設定說明
-- JSON Payload 格式
-- Pine Script 範例
-
-## 🛠️ 開發
-
-### 本地開發
-
-```bash
-# 安裝依賴
-pip install -r requirements.txt
-
-# 啟動 Redis (需要先安裝)
-redis-server
-
-# 啟動 Trading Worker
-python trading_worker.py
-
-# 啟動 API 開發伺服器
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 專案結構
-
-```
-shioaji-api-dashboard/
-├── main.py              # FastAPI 應用程式
-├── trading.py           # Shioaji 交易邏輯（共用函數）
-├── trading_queue.py     # Redis 佇列介面
-├── trading_worker.py    # Trading Worker 服務
-├── database.py          # 資料庫連線
-├── models.py            # SQLAlchemy 模型
-├── static/
-│   ├── dashboard.html   # Web 控制台 (HTML)
-│   ├── css/
-│   │   └── dashboard.css  # 樣式表
-│   └── js/
-│       └── dashboard.js   # 前端邏輯
-├── db/
-│   ├── migrate.sh       # 資料庫遷移腳本
-│   └── migrations/      # SQL 遷移檔案
-├── certs/               # CA 憑證 (gitignored)
-├── docker-compose.yaml  # Docker 編排
-├── Dockerfile           # Docker 映像
-├── requirements.txt     # Python 依賴
-└── .env                 # 環境變數 (gitignored)
-```
-
-### Docker 服務
-
-| 服務 | 說明 | Port |
-|------|------|------|
-| `nginx` | 反向代理、IP 白名單 | 9879 |
-| `ngrok` | HTTPS 隧道（Web 介面） | 4040 |
-| `api` | FastAPI 應用（4 workers） | 8000 (internal) |
-| `trading-worker` | Shioaji 連線管理、自動重連 | - |
-| `redis` | 訊息佇列 | 6379 (internal) |
-| `db` | PostgreSQL 資料庫 | 5432 (internal) |
-
-### CLI 指令
-
-系統提供友善的命令列工具 `shioaji-cli.sh`：
-
-| 指令 | 說明 |
-|------|------|
-| `./shioaji-cli.sh start` | 啟動所有服務 |
-| `./shioaji-cli.sh stop` | 停止所有服務 |
-| `./shioaji-cli.sh restart` | 重啟所有服務 |
-| `./shioaji-cli.sh status` | 查看服務狀態 |
-| `./shioaji-cli.sh health` | 檢查系統健康狀態 |
-| `./shioaji-cli.sh logs` | 查看所有日誌 |
-| `./shioaji-cli.sh logs-api` | 只看 API 日誌 |
-| `./shioaji-cli.sh logs-worker` | 只看 Trading Worker 日誌 |
-| `./shioaji-cli.sh dashboard` | 開啟控制台 |
-| `./shioaji-cli.sh reset` | 重置資料庫（清除所有資料） |
-| `./shioaji-cli.sh update` | 更新並重建系統 |
-| `./shioaji-cli.sh help` | 顯示說明 |
-
-### 查看日誌（傳統方式）
-
-```bash
-# 查看所有服務日誌
-docker compose logs -f
-
-# 查看 Trading Worker 日誌
-docker compose logs -f trading-worker
-
-# 查看 API 日誌
-docker compose logs -f api
-```
-
-## 📝 訂單狀態說明
-
-| 狀態 | 說明 |
-|------|------|
-| `pending` | 待處理 |
-| `submitted` | 已送出至交易所 |
-| `filled` | 完全成交 |
-| `partial_filled` | 部分成交 |
-| `cancelled` | 已取消 |
-| `failed` | 失敗 |
-| `no_action` | 無需動作（例如：無持倉可平倉） |
-
-## ⚠️ 注意事項
-
-1. **模擬模式優先** - 請先使用模擬模式測試，確認策略正確後再切換實盤
-2. **憑證安全** - 請勿將 `.env` 和 `certs/` 資料夾提交至版本控制
-3. **網路安全** - 系統已內建 HTTPS (NGROK) 和 IP 白名單 (NGINX)
-4. **交易風險** - 自動交易有風險，請謹慎使用
-5. **連線限制** - 系統使用 Redis 佇列確保只維持單一 Shioaji 連線，避免 "Too Many Connections" 錯誤
-6. **自動重連** - Trading Worker 會自動重試失敗的請求（最多 3 次），並在 Token 過期時自動重新連線
-
-## 🔧 故障排除
-
-### Trading Worker 無法連線
-
-```bash
-# 檢查服務狀態
-docker compose ps
-
-# 重啟 Trading Worker
-docker compose restart trading-worker
-
-# 查看 Worker 日誌
-docker compose logs trading-worker --tail=50
-```
-
-### 訂單狀態卡在 submitted
-
-1. 使用控制台的「重新查詢」按鈕手動更新狀態
-2. 或呼叫 API：`POST /orders/{order_id}/recheck`
-
-### Redis 連線錯誤
-
-```bash
-# 檢查 Redis 狀態
-docker compose exec redis redis-cli ping
-# 應回應 PONG
-```
-
-### 資料庫重置（全新開始）
-
-如果需要清除所有資料，重新開始：
-
-```bash
-./shioaji-cli.sh reset
-```
-
-**手動重置：**
-```bash
-# 停止所有服務
-docker compose down
-
-# 刪除資料 volumes（會清除所有訂單紀錄）
-docker volume rm shioaji-api-dashboard_postgres_data
-docker volume rm shioaji-api-dashboard_redis_data
-
-# 重新啟動（會自動建立資料表）
-docker compose up -d
-
-# 確認 migration 成功
-docker compose logs db-migrate
-```
-
-### 確認資料庫建立成功
-
-```bash
-# 查看 migration 日誌
-docker compose logs db-migrate
-
-# 預期看到類似以下訊息：
-# === Database Migration Runner ===
-# PostgreSQL is ready!
-# Running migrations...
-#   ✓ 000_schema_migrations (applied)
-#   ✓ 001_initial_schema (applied)
-# === Migration complete ===
-```
-
-## 📚 參考資源
-
-- [Shioaji 官方文件](https://sinotrade.github.io/)
-- [TradingView Webhook 文件](https://www.tradingview.com/support/solutions/43000529348)
-- [FastAPI 文件](https://fastapi.tiangolo.com/)
-- [Redis 文件](https://redis.io/documentation)
-
-## 📄 授權
-
-MIT License
-
----
-
-## 💼 客製化服務
-
-如需客製化開發、企業級支援或技術諮詢，歡迎聯繫：
-
-📧 **Email:** `luisleo52655@gmail.com`
-
-提供服務包括：
-- 🔧 客製化功能開發
-- 🏢 企業部署支援 (AWS, GCP, SaaS設計)
-- 📊 交易策略整合 (PineScript開發)
-- 🛡️ 安全性強化 (SSL)
-- 📈 效能優化
+- Webhook 必須使用 HTTPS（可用 ngrok 或 NGINX）
+- 正式交易請務必先做模擬驗證
+- 憑證與 .env 請勿提交到版本控制

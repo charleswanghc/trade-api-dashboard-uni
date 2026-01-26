@@ -26,10 +26,20 @@ class OrderHistory(Base):
     __tablename__ = "order_history"
 
     id = Column(Integer, primary_key=True, index=True)
-    symbol = Column(String, nullable=False, index=True)  # Shioaji symbol (e.g., MXF202601, MXFR1)
-    code = Column(String, nullable=True, index=True)  # Exchange code (e.g., MXFA6)
-    action = Column(String, nullable=False)
+    symbol = Column(String, nullable=False, index=True)  # 商品代碼 (例：TXFF5)
+    code = Column(String, nullable=True, index=True)  # 可選擇填入交易所代碼
+    action = Column(String, nullable=False)  # B/S
     quantity = Column(Integer, nullable=False)
+    price = Column(Float, nullable=True)
+    strategy = Column(String, nullable=True)
+    order_type = Column(String, nullable=True)  # L/M/P
+    order_condition = Column(String, nullable=True)  # I/R/F
+    open_close_flag = Column(String, nullable=True)  # 0/1/''
+    dtrade = Column(String, nullable=True)  # Y/N
+    note = Column(String, nullable=True)
+    account = Column(String, nullable=True)
+    sub_account = Column(String, nullable=True)
+    source = Column(String, nullable=True)  # webhook or manual
     status = Column(String, nullable=False)
     order_result = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
@@ -54,6 +64,16 @@ class OrderHistory(Base):
             "code": self.code,
             "action": self.action,
             "quantity": self.quantity,
+            "price": self.price,
+            "strategy": self.strategy,
+            "order_type": self.order_type,
+            "order_condition": self.order_condition,
+            "open_close_flag": self.open_close_flag,
+            "dtrade": self.dtrade,
+            "note": self.note,
+            "account": self.account,
+            "sub_account": self.sub_account,
+            "source": self.source,
             "status": self.status,
             "order_result": self.order_result,
             "error_message": self.error_message,
