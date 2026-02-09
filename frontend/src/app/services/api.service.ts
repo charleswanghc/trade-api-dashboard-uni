@@ -1,12 +1,11 @@
 import { HttpClient, HttpEvent, HttpHandlerFn, HttpRequest } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-
-const DEFAULT_API_BASE = 'http://localhost:9879';
+import { environment } from '../../environments/environment';
 
 const getApiBaseUrl = (): string => {
   const custom = (window as any).__API_BASE_URL__ as string | undefined;
-  return custom || DEFAULT_API_BASE;
+  return custom || environment.apiUrl;
 };
 
 export const apiBaseUrlInterceptor = (

@@ -54,3 +54,7 @@ Thumbs.db
 # Marketing posts (personal)
 docs/MARKETING_POST*
 docs/MEDIUM*
+
+# Azure deployment
+deployment-info.json
+*.deployment

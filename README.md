@@ -1,6 +1,22 @@
 # TradingView × Unitrade 自動交易系統
 
-此專案將原本的 Shioaji 架構改為 **Angular 前端 + FastAPI 後端**，並使用 **統一期貨 Unitrade 官方 Python API** 進行下單。
+此專案將原本的 Shioaji 架構改為 **Angular 20 前端 + FastAPI 後端**，並使用 **統一期貨 Unitrade 官方 Python API** 進行下單。
+
+## 🚀 快速開始
+
+完整部署指南請參考：**[DEPLOYMENT.md](DEPLOYMENT.md)**
+
+### 本機開發
+
+```bash
+# 後端
+docker compose up -d
+
+# 前端
+cd frontend
+npm install
+npm start
+```
 
 ## 🔗 官方資源
 
@@ -11,11 +27,13 @@
 
 ## ✅ 功能目標
 
-- TradingView Webhook 自動下單
-- Angular 18+ Dashboard（SPA）
-- FastAPI 後端 API
-- Unitrade API 下單
-- 可部署至 Azure / Google Cloud（Linux 環境）
+- ✅ TradingView Webhook 自動下單
+- ✅ Angular 20 Dashboard（SPA）
+- ✅ FastAPI 後端 API
+- ✅ Unitrade API 下單
+- ✅ Azure 部署（台灣區域優化）
+- ✅ PostgreSQL 資料庫
+- ✅ Docker 容器化
 
 ## 🧱 系統架構
 
@@ -117,13 +135,12 @@ cp example.env .env
   "note": "Manual",
   "strategy": "Manual"
 }
-```
-
-## 🧭 前端（Angular）
+``` 20）
 
 前端位於 [frontend/](frontend/)：
 
-- Angular 18+
+- Angular 20.3.16
+- Standalone Components
 - Reactive Forms
 - HttpClient
 - SPA Router
@@ -134,8 +151,17 @@ cp example.env .env
 
 ### 前端啟動
 
-```
+```bash
 cd frontend
+npm install
+npm start
+```
+
+### 前端建置
+
+```bash
+cd frontend
+npm run build -- --configuration productionnd
 npm install
 npm start
 ```
@@ -164,26 +190,47 @@ http://localhost:9879/docs
 2. TradingView Webhook 指向 `http(s)://<domain>/webhook`
 3. Webhook 送出下單 JSON
 4. 後端寫入資料庫（source=webhook）
-5. 前端 Orders 頁面會顯示最新訂單（含 source）
+5. 前端 Azure 部署
 
-快速測試（以本機為例）：
+### 🎯 推薦方案（台灣優化）
 
+| 服務 | Azure 方案 | 月費估算 |
+|------|-----------|---------|
+| 後端 API | Container Apps | NT$ 300-800 |
+| 資料庫 | PostgreSQL 容器 | NT$ 100-300 |
+| 前端 | Static Web Apps (Free) | NT$ 0 |
+| **總計** | | **NT$ 400-1,100** |
+
+### 快速部署
+
+**完整教學請參考：[DEPLOYMENT.md](DEPLOYMENT.md)**
+
+```powershell
+# 1. 登入 Azure
+az login
+
+# 2. 執行自動化部署腳本
+.\deploy.ps1 `
+    -UnitradeWsUrl "wss://your-ws-url" `
+    -UnitradeAccount "your_account" `
+    -UnitradePassword "your_password" `
+    -UnitradeCertPassword "cert_password" `
+    -UnitradeActno "your_actno"
 ```
-curl -X POST http://localhost:9879/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"actno":"1234567","productid":"TXFF5","bs":"B","ordertype":"L","price":17850,"orderqty":1,"ordercondition":"R","opencloseflag":"","dtrade":"N","note":"TV"}'
-```
 
-## ☁️ 部署（參考）
+### 部署檔案
 
-### Dockerfile
+- [DEPLOYMENT.md](DEPLOYMENT.md) - 快速部署指南
+- [azure-deployment.md](azure-deployment.md) - 完整手動部署教學
+- [deploy.ps1](deploy.ps1) - 自動化部署腳本
+- [.github/workflows/azure-deploy.yml](.github/workflows/azure-deploy.yml) - CI/CD 設定
 
-```
-FROM python:3.11
-WORKDIR /app
-COPY . .
-RUN pip install -r requirements.txt
-CMD uvicorn main:app --host 0.0.0.0 --port 8000
+### 其他雲端平台
+
+也可部署至：
+- Google Cloud Run
+- Google Compute Engine（Linux VM）
+- AWS ECS / App Runner
 ```
 
 ### 雲端
