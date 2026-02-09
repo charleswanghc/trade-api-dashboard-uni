@@ -16,6 +16,9 @@ COPY database.py .
 COPY models.py .
 COPY unitrade_client.py .
 
+# Copy certificates
+COPY certs/ /app/certs/
+
 # Expose port
 EXPOSE 8000
 
