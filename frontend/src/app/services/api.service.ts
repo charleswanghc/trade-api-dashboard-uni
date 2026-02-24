@@ -1,6 +1,7 @@
 import { HttpClient, HttpEvent, HttpHandlerFn, HttpRequest } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { timeout } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
 const getApiBaseUrl = (): string => {
@@ -89,7 +90,7 @@ export class ApiService {
   constructor(private http: HttpClient) {}
 
   health() {
-    return this.http.get<Record<string, unknown>>('/health');
+    return this.http.get<Record<string, unknown>>('/health').pipe(timeout(5000));
   }
 
   listOrders() {

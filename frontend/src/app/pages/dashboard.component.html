@@ -5,10 +5,10 @@
     <div class="stat-body">
       <div class="stat-label">系統狀態</div>
       <div class="stat-value"
-        [class.text-success]="health?.status === 'ok'"
-        [class.text-danger]="health && health.status !== 'ok'"
-        [class.text-muted]="!health">
-        {{ health?.status === 'ok' ? '正常運行' : (health ? '異常' : '…') }}
+        [class.text-success]="!healthError && health?.status === 'ok'"
+        [class.text-danger]="healthError || (health && health.status !== 'ok')"
+        [class.text-muted]="!healthError && !health">
+        {{ healthError ? '離線' : (health?.status === 'ok' ? '正常運行' : (health ? '異常' : '…')) }}
       </div>
     </div>
   </div>
@@ -18,10 +18,10 @@
     <div class="stat-body">
       <div class="stat-label">Unitrade 連線</div>
       <div class="stat-value"
-        [class.text-success]="health?.unitrade === 'connected'"
-        [class.text-danger]="health && health.unitrade !== 'connected'"
-        [class.text-muted]="!health">
-        {{ health?.unitrade ?? '…' }}
+        [class.text-success]="!healthError && health?.unitrade === 'connected'"
+        [class.text-danger]="healthError || (health && health.unitrade !== 'connected')"
+        [class.text-muted]="!healthError && !health">
+        {{ healthError ? '離線' : (health?.unitrade ?? '…') }}
       </div>
     </div>
   </div>
@@ -49,8 +49,12 @@
   <div class="card">
     <div class="card-header">
       <div class="card-title">連線狀態</div>
+      <span *ngIf="lastChecked" class="text-muted" style="font-size:11px">
+        {{ lastChecked | date:'HH:mm:ss' }}
+      </span>
     </div>
-    <ng-container *ngIf="health; else loadingTpl">
+    <!-- 正常 -->
+    <ng-container *ngIf="!healthError && health; else notOkTpl">
       <div class="info-row">
         <span class="info-label">API 伺服器</span>
         <span class="badge" [ngClass]="health.status === 'ok' ? 'success' : 'error'">
@@ -64,8 +68,21 @@
         </span>
       </div>
     </ng-container>
-    <ng-template #loadingTpl>
-      <div class="loading-row">連線中…</div>
+    <!-- 離線 or 載入中 -->
+    <ng-template #notOkTpl>
+      <ng-container *ngIf="healthError; else loadingTpl">
+        <div class="info-row">
+          <span class="info-label">API 伺服器</span>
+          <span class="badge error">OFFLINE</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Unitrade</span>
+          <span class="badge error">—</span>
+        </div>
+      </ng-container>
+      <ng-template #loadingTpl>
+        <div class="loading-row">連線中…</div>
+      </ng-template>
     </ng-template>
   </div>
 
