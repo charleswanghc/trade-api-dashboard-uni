@@ -8,64 +8,8 @@ import { filter } from 'rxjs/operators';
   selector: 'app-root',
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule],
-  template: `
-    <div class="app-shell">
-
-      <!-- ── 左側邊欄 ── -->
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <div class="sidebar-logo">📈</div>
-          <div>
-            <div class="sidebar-brand-name">期貨自動交易</div>
-            <div class="sidebar-brand-sub">Auto Trading System</div>
-          </div>
-        </div>
-
-        <nav class="sidebar-nav">
-          <div class="nav-section">主要功能</div>
-          <a routerLink="/dashboard" routerLinkActive="active" class="nav-item">
-            <span class="nav-icon">⊞</span><span>系統總覽</span>
-          </a>
-          <a routerLink="/strategies" routerLinkActive="active" class="nav-item">
-            <span class="nav-icon">⚙</span><span>策略管理</span>
-          </a>
-          <a routerLink="/orders" routerLinkActive="active" class="nav-item">
-            <span class="nav-icon">⇅</span><span>手動下單</span>
-          </a>
-
-          <div class="nav-section" style="margin-top:6px">監控</div>
-          <a routerLink="/positions" routerLinkActive="active" class="nav-item">
-            <span class="nav-icon">◉</span><span>未平倉部位</span>
-          </a>
-          <a routerLink="/trades" routerLinkActive="active" class="nav-item">
-            <span class="nav-icon">↺</span><span>成交紀錄</span>
-          </a>
-          <a routerLink="/alerts" routerLinkActive="active" class="nav-item">
-            <span class="nav-icon">◎</span><span>訊號記錄</span>
-          </a>
-        </nav>
-
-        <div class="sidebar-footer">
-          <div class="status-indicator">
-            <span class="status-dot"></span>
-            <span>系統運行中</span>
-          </div>
-        </div>
-      </aside>
-
-      <!-- ── 主要區域 ── -->
-      <div class="main-area">
-        <header class="top-bar">
-          <div class="top-bar-title">{{ pageTitle }}</div>
-          <div class="clock">{{ currentTime }}</div>
-        </header>
-        <main class="content">
-          <router-outlet />
-        </main>
-      </div>
-
-    </div>
-  `
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.scss',
 })
 export class AppComponent implements OnInit, OnDestroy {
   currentTime = '';

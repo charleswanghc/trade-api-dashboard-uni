@@ -1,0 +1,151 @@
+<!-- Stat Cards -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-icon green">🖥</div>
+    <div class="stat-body">
+      <div class="stat-label">系統狀態</div>
+      <div class="stat-value"
+        [class.text-success]="health?.status === 'ok'"
+        [class.text-danger]="health && health.status !== 'ok'"
+        [class.text-muted]="!health">
+        {{ health?.status === 'ok' ? '正常運行' : (health ? '異常' : '…') }}
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon cyan">🔌</div>
+    <div class="stat-body">
+      <div class="stat-label">Unitrade 連線</div>
+      <div class="stat-value"
+        [class.text-success]="health?.unitrade === 'connected'"
+        [class.text-danger]="health && health.unitrade !== 'connected'"
+        [class.text-muted]="!health">
+        {{ health?.unitrade ?? '…' }}
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon purple">⚙</div>
+    <div class="stat-body">
+      <div class="stat-label">啟用策略</div>
+      <div class="stat-value">{{ strategyCount ?? '…' }}</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon orange">📡</div>
+    <div class="stat-body">
+      <div class="stat-label">今日訊號</div>
+      <div class="stat-value">{{ todaySignals ?? '…' }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Info Grid -->
+<div class="grid grid-3" style="margin-bottom: 20px">
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">連線狀態</div>
+    </div>
+    <ng-container *ngIf="health; else loadingTpl">
+      <div class="info-row">
+        <span class="info-label">API 伺服器</span>
+        <span class="badge" [ngClass]="health.status === 'ok' ? 'success' : 'error'">
+          {{ health.status === 'ok' ? 'ONLINE' : 'ERROR' }}
+        </span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Unitrade</span>
+        <span class="badge" [ngClass]="health.unitrade === 'connected' ? 'success' : 'error'">
+          {{ health.unitrade }}
+        </span>
+      </div>
+    </ng-container>
+    <ng-template #loadingTpl>
+      <div class="loading-row">連線中…</div>
+    </ng-template>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">API 端點</div>
+    </div>
+    <div class="endpoint-row">
+      <span class="method-badge post">POST</span>
+      <code class="endpoint-path">/webhook</code>
+      <span class="endpoint-desc">訊號接收</span>
+    </div>
+    <div class="endpoint-row">
+      <span class="method-badge post">POST</span>
+      <code class="endpoint-path">/order</code>
+      <span class="endpoint-desc">手動下單</span>
+    </div>
+    <div class="endpoint-row">
+      <span class="method-badge get">GET</span>
+      <code class="endpoint-path">/health</code>
+      <span class="endpoint-desc">健康檢查</span>
+    </div>
+    <div class="endpoint-row">
+      <span class="method-badge get">GET</span>
+      <code class="endpoint-path">/signals</code>
+      <span class="endpoint-desc">訊號記錄</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">快速導覽</div>
+    </div>
+    <div class="quick-links">
+      <a class="quick-link" routerLink="/strategies">⚙ 策略管理</a>
+      <a class="quick-link" routerLink="/orders">⇅ 手動下單</a>
+      <a class="quick-link" routerLink="/positions">◉ 持倉部位</a>
+      <a class="quick-link" routerLink="/alerts">◎ 訊號記錄</a>
+    </div>
+  </div>
+
+</div>
+
+<!-- Recent Signals Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">最近訊號記錄</div>
+    <a routerLink="/alerts" style="font-size: 12px; color: var(--primary)">查看全部 →</a>
+  </div>
+  <ng-container *ngIf="recentSignals.length > 0; else noSignals">
+    <table>
+      <thead>
+        <tr>
+          <th>時間</th>
+          <th>策略</th>
+          <th>訊號</th>
+          <th>商品</th>
+          <th>狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let s of recentSignals">
+          <td class="text-muted" style="font-size: 12px; font-family: monospace; white-space: nowrap">
+            {{ s.created_at | date:'MM/dd HH:mm:ss' }}
+          </td>
+          <td>{{ s.strategy_name }}</td>
+          <td>
+            <span class="badge" [ngClass]="getSignalClass(s.signal_type)">{{ s.signal_type }}</span>
+          </td>
+          <td>{{ s.actual_product || s.signal_product || '—' }}</td>
+          <td>
+            <span class="badge" [ngClass]="s.status === 'success' ? 'success' : (s.status === 'error' ? 'error' : 'info')">
+              {{ s.status }}
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </ng-container>
+  <ng-template #noSignals>
+    <div class="empty-state">尚無訊號記錄</div>
+  </ng-template>
+</div>

@@ -1,0 +1,205 @@
+<div class="container">
+  <div class="header">
+    <h1>策略管理</h1>
+    <button class="btn btn-primary" (click)="showCreateForm()">
+      ➕ 建立新策略
+    </button>
+  </div>
+
+  <!-- 建立/編輯表單 -->
+  <div class="form-card" *ngIf="showForm">
+    <h2>{{ isEditing ? '編輯策略' : '建立策略' }}</h2>
+    <form (ngSubmit)="saveStrategy()">
+      <div class="form-row">
+        <div class="form-group">
+          <label>策略名稱 *</label>
+          <input
+            type="text"
+            [(ngModel)]="currentStrategy.strategy_name"
+            name="strategy_name"
+            [disabled]="isEditing"
+            required
+            placeholder="例如：TXF_vivi_mini">
+        </div>
+        <div class="form-group">
+          <label>說明</label>
+          <input
+            type="text"
+            [(ngModel)]="currentStrategy.description"
+            name="description"
+            placeholder="策略描述">
+        </div>
+      </div>
+
+      <h3>🎯 商品設定</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>訊號商品代碼 *</label>
+          <input
+            type="text"
+            [(ngModel)]="currentStrategy.source_product"
+            name="source_product"
+            required
+            placeholder="TXFF5">
+          <small>TradingView 訊號中的商品代碼</small>
+        </div>
+        <div class="form-group">
+          <label>實際下單商品 *</label>
+          <input
+            type="text"
+            [(ngModel)]="currentStrategy.target_product"
+            name="target_product"
+            required
+            placeholder="MXFF5">
+          <small>實際要下單的商品代碼</small>
+        </div>
+      </div>
+
+      <h3>📊 數量設定</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>口數倍數 *</label>
+          <input
+            type="number"
+            [(ngModel)]="currentStrategy.quantity_multiplier"
+            name="quantity_multiplier"
+            min="1"
+            required>
+          <small>訊號數量 × 此倍數 = 實際下單口數</small>
+        </div>
+        <div class="form-group">
+          <label>最大持倉</label>
+          <input
+            type="number"
+            [(ngModel)]="currentStrategy.max_position"
+            name="max_position"
+            min="1">
+        </div>
+      </div>
+
+      <h3>📥 進場設定</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>進場單別</label>
+          <select [(ngModel)]="currentStrategy.entry_order_type" name="entry_order_type">
+            <option value="L">限價單 (L)</option>
+            <option value="M">市價單 (M)</option>
+            <option value="P">範圍市價 (P)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>進場委託條件</label>
+          <select [(ngModel)]="currentStrategy.entry_order_condition" name="entry_order_condition">
+            <option value="R">ROD (R)</option>
+            <option value="I">IOC (I)</option>
+            <option value="F">FOK (F)</option>
+          </select>
+        </div>
+      </div>
+
+      <h3>📤 出場設定</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>出場單別</label>
+          <select [(ngModel)]="currentStrategy.exit_order_type" name="exit_order_type">
+            <option value="L">限價單 (L)</option>
+            <option value="M">市價單 (M)</option>
+            <option value="P">範圍市價 (P)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>出場委託條件</label>
+          <select [(ngModel)]="currentStrategy.exit_order_condition" name="exit_order_condition">
+            <option value="R">ROD (R)</option>
+            <option value="I">IOC (I)</option>
+            <option value="F">FOK (F)</option>
+          </select>
+        </div>
+      </div>
+
+      <h3>⚙️ 其他設定</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>當沖</label>
+          <select [(ngModel)]="currentStrategy.dtrade" name="dtrade">
+            <option value="N">否 (N)</option>
+            <option value="Y">是 (Y)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>帳號</label>
+          <input
+            type="text"
+            [(ngModel)]="currentStrategy.account"
+            name="account"
+            placeholder="留空使用環境變數">
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" (click)="cancelForm()">取消</button>
+        <button type="submit" class="btn btn-primary">{{ isEditing ? '更新' : '建立' }}</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 策略列表 -->
+  <div class="strategies-grid">
+    <div *ngFor="let strategy of strategies" class="strategy-card" [class.disabled]="!strategy.enabled">
+      <div class="strategy-header">
+        <h3>{{ strategy.strategy_name }}</h3>
+        <div class="strategy-actions">
+          <button
+            class="btn-icon"
+            [class.active]="strategy.enabled"
+            (click)="toggleStrategy(strategy.strategy_name)"
+            [title]="strategy.enabled ? '停用' : '啟用'">
+            {{ strategy.enabled ? '✅' : '⭕' }}
+          </button>
+          <button class="btn-icon" (click)="editStrategy(strategy)" title="編輯">✏️</button>
+          <button class="btn-icon danger" (click)="deleteStrategy(strategy.strategy_name)" title="刪除">🗑️</button>
+        </div>
+      </div>
+
+      <div class="strategy-info">
+        <div class="info-row">
+          <span class="label">商品映射：</span>
+          <span class="value">{{ strategy.source_product }} → {{ strategy.target_product }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">口數倍數：</span>
+          <span class="value highlight">×{{ strategy.quantity_multiplier }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">進場：</span>
+          <span class="value">{{ getOrderTypeLabel(strategy.entry_order_type) }} / {{ getConditionLabel(strategy.entry_order_condition) }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">出場：</span>
+          <span class="value">{{ getOrderTypeLabel(strategy.exit_order_type) }} / {{ getConditionLabel(strategy.exit_order_condition) }}</span>
+        </div>
+        <div class="info-row" *ngIf="strategy.dtrade === 'Y'">
+          <span class="label">當沖：</span>
+          <span class="value badge">是</span>
+        </div>
+        <div class="info-row" *ngIf="strategy.description">
+          <span class="label">說明：</span>
+          <span class="value">{{ strategy.description }}</span>
+        </div>
+      </div>
+
+      <div class="strategy-footer">
+        <small>建立：{{ formatDate(strategy.created_at) }}</small>
+        <small *ngIf="strategy.updated_at">更新：{{ formatDate(strategy.updated_at) }}</small>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="strategies.length === 0 && !loading" class="empty-state">
+    <p>尚未建立任何策略</p>
+    <button class="btn btn-primary" (click)="showCreateForm()">建立第一個策略</button>
+  </div>
+
+  <div *ngIf="loading" class="loading">載入中...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+</div>
