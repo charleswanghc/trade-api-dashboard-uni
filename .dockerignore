@@ -1,29 +1,8 @@
-# Exclude frontend (Angular + node_modules) - not needed for backend image
 frontend/
-
-# Exclude docs and static
-docs/
-static/
-nginx/
-db/
-
-# Exclude test files
-test_minimal.py
-Dockerfile.test
-*.bak
-*.log
-
-# Exclude dev config
+.git
 .env
 .env.*
-.github/
-.acrignore
-.vibe-coding/
-.vscode/
-
-# Python cache
 __pycache__/
-*.py[cod]
-.pytest_cache/
+*.pyc
 .venv/
 venv/
