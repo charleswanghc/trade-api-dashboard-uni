@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自動交易控制台</title>
+    <!-- Cache bust: bump version when files change -->
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=1">
+</head>
+<body>
+    <div class="container">
+        <h1>📊 自動交易控制台</h1>
+        
+        <div class="auth-section">
+            <label for="authKey">API 驗證金鑰</label>
+            <input type="password" id="authKey" placeholder="請輸入驗證金鑰">
+            <label class="simulation-toggle">
+                <input type="checkbox" id="simulationMode" checked>
+                <span>模擬模式</span>
+            </label>
+            <button class="btn-primary" onclick="loadCurrentTab()">載入資料</button>
+            <button class="btn-secondary" onclick="exportCSV()">匯出 CSV</button>
+        </div>
+        
+        <div class="error-msg" id="errorMsg"></div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('orders')">📋 委託紀錄</button>
+            <button class="tab" onclick="switchTab('positions')">💼 目前持倉</button>
+            <button class="tab" onclick="switchTab('symbols')">📜 可用商品</button>
+            <button class="tab" onclick="switchTab('webhook')">🔗 TradingView 設定</button>
+        </div>
+        
+        <!-- Orders Tab -->
+        <div id="orders-tab" class="tab-content active">
+            <div class="filters">
+                <select id="filterStatus">
+                    <option value="">全部狀態</option>
+                    <option value="success">成功</option>
+                    <option value="failed">失敗</option>
+                    <option value="no_action">無動作</option>
+                </select>
+                <select id="filterAction">
+                    <option value="">全部動作</option>
+                    <option value="long_entry">做多進場</option>
+                    <option value="long_exit">做多出場</option>
+                    <option value="short_entry">做空進場</option>
+                    <option value="short_exit">做空出場</option>
+                </select>
+                <input type="text" id="filterSymbol" placeholder="商品代碼...">
+                <button class="btn-secondary" onclick="fetchOrders()">套用篩選</button>
+            </div>
+            
+            <div class="stats" id="orderStats">
+                <div class="stat-card total"><h3>總委託數</h3><div class="value" id="statTotal">-</div></div>
+                <div class="stat-card success"><h3>成功</h3><div class="value" id="statSuccess">-</div></div>
+                <div class="stat-card failed"><h3>失敗</h3><div class="value" id="statFailed">-</div></div>
+            </div>
+            
+            <div id="ordersTable"><div class="empty">請輸入驗證金鑰並點擊「載入資料」查看委託紀錄</div></div>
+        </div>
+        
+        <!-- Positions Tab -->
+        <div id="positions-tab" class="tab-content">
+            <div class="stats" id="positionStats">
+                <div class="stat-card total"><h3>持倉數量</h3><div class="value" id="posCount">-</div></div>
+                <div class="stat-card" id="pnlCard"><h3>未實現損益</h3><div class="value" id="totalPnl">-</div></div>
+            </div>
+            
+            <div id="positionsTable"><div class="empty">請輸入驗證金鑰並點擊「載入資料」查看目前持倉</div></div>
+        </div>
+        
+        <!-- Symbols Tab -->
+        <div id="symbols-tab" class="tab-content">
+            <div class="info-card">
+                <h2>📜 可用交易商品</h2>
+                <p style="color: #a1a1aa; margin-top: 0.5rem;">以下為目前可交易的期貨商品。<strong style="color: #00d9ff;">請使用 Symbol 欄位</strong>設定 TradingView 警報。</p>
+                <div class="alert alert-info" style="margin-top: 1rem;">
+                    💡 <strong>Symbol</strong> (如 MXF202601) 是 Shioaji API 使用的格式；<strong>Code</strong> (如 MXFA6) 是交易所代碼，僅供參考。
+                </div>
+            </div>
+            
+            <div class="filters">
+                <input type="text" id="symbolSearch" placeholder="搜尋商品代碼..." oninput="filterSymbols()">
+                <button class="btn-primary" onclick="fetchSymbols()">重新載入</button>
+            </div>
+            
+            <div class="stats" id="symbolStats">
+                <div class="stat-card total"><h3>商品總數</h3><div class="value" id="symbolCount">-</div></div>
+            </div>
+            
+            <div id="symbolsTable"><div class="empty">點擊「重新載入」取得商品列表</div></div>
+        </div>
+        
+        <!-- Webhook Tab -->
+        <div id="webhook-tab" class="tab-content">
+            <div class="info-card">
+                <h2>🔗 TradingView Webhook 設定指南</h2>
+                <p style="color: #a1a1aa; margin-top: 0.5rem;">此後端系統專為 TradingView 警報 Webhook 設計，可自動執行期貨交易。</p>
+            </div>
+            
+            <div class="info-card" id="webhookCard">
+                <h3>📍 步驟一：Webhook 網址</h3>
+                <p style="color: #a1a1aa; margin: 0.5rem 0;">將以下網址貼到 TradingView 警報的 Webhook URL 欄位：</p>
+                
+                <!-- Mode Toggle Switch -->
+                <div style="display: flex; align-items: center; gap: 1rem; margin: 1rem 0;">
+                    <span id="simLabel" style="color: #22c55e; font-weight: 600;">🧪 模擬模式</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="modeToggle" onchange="toggleTradingMode()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span id="realLabel" style="color: #71717a;">💰 實盤模式</span>
+                </div>
+                
+                <div class="code-block" id="webhookCodeBlock">
+                    <button class="copy-btn" onclick="copyWebhookUrl()">複製</button>
+                    <pre id="webhookUrl"></pre>
+                </div>
+                
+                <!-- Real Trading Warning (hidden by default) -->
+                <div class="alert" id="realTradingWarning" style="display: none; margin-top: 1rem; background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.4); color: #fca5a5;">
+                    ⚠️ <strong>實盤模式</strong> — 此網址將執行真實交易，請確認已設定 CA 憑證。
+                </div>
+                
+                <!-- Simulation Mode Info -->
+                <div class="alert alert-info" id="simModeInfo" style="margin-top: 1rem;">
+                    ✅ <strong>模擬模式：</strong>安全測試環境，不會執行真實交易。
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <h3>📝 步驟二：訊息格式 (Message)</h3>
+                <p style="color: #a1a1aa; margin: 0.5rem 0;">在 TradingView 警報的「訊息」欄位中，使用以下 JSON 格式（搭配 Pine Script 策略）：</p>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyToClipboard(this, document.getElementById('payloadTemplate').textContent)">複製</button>
+                    <pre id="payloadTemplate">{
+    "action": "{{strategy.order.alert_message}}",
+    "quantity": {{strategy.order.contracts}},
+    "symbol": "MXFR1"
+}</pre>
+                </div>
+                <div class="alert alert-info">
+                    💡 <strong>說明：</strong><code>{{strategy.order.alert_message}}</code> 會自動帶入 Pine Script 中設定的 alert_message 值
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <h3>📜 步驟三：Pine Script 策略範例</h3>
+                <p style="color: #a1a1aa; margin: 0.5rem 0;">在您的 Pine Script 策略中，使用 <code>alert_message</code> 參數設定交易動作：</p>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyToClipboard(this, document.getElementById('pinescriptExample').textContent)">複製</button>
+                    <pre id="pinescriptExample">//@version=5
+strategy("My Strategy", overlay=true, default_qty_type=strategy.fixed, default_qty_value=1)
+
+// ===== 參數設定 =====
+stopLossPct = input.float(2.0, "止損 %", minval=0.1, step=0.1)
+takeProfitPct = input.float(4.0, "止盈 %", minval=0.1, step=0.1)
+
+// ===== 進場條件 =====
+fastMA = ta.sma(close, 14)
+slowMA = ta.sma(close, 28)
+longCondition = ta.crossover(fastMA, slowMA)
+shortCondition = ta.crossunder(fastMA, slowMA)
+
+// ===== 止損止盈價格計算 =====
+longStopLoss = strategy.position_avg_price * (1 - stopLossPct / 100)
+longTakeProfit = strategy.position_avg_price * (1 + takeProfitPct / 100)
+shortStopLoss = strategy.position_avg_price * (1 + stopLossPct / 100)
+shortTakeProfit = strategy.position_avg_price * (1 - takeProfitPct / 100)
+
+// ===== 做多進場（同時平空倉） =====
+if (longCondition)
+    if (strategy.position_size < 0)  // 有空單先平倉
+        strategy.close("Short", alert_message="short_exit")
+    strategy.entry("Long", strategy.long, alert_message="long_entry")
+
+// ===== 做空進場（同時平多倉） =====
+if (shortCondition)
+    if (strategy.position_size > 0)  // 有多單先平倉
+        strategy.close("Long", alert_message="long_exit")
+    strategy.entry("Short", strategy.short, alert_message="short_entry")
+
+// ===== 多單止損止盈 =====
+if (strategy.position_size > 0)
+    strategy.exit("Long Exit", "Long", stop=longStopLoss, limit=longTakeProfit, alert_message="long_exit")
+
+// ===== 空單止損止盈 =====
+if (strategy.position_size < 0)
+    strategy.exit("Short Exit", "Short", stop=shortStopLoss, limit=shortTakeProfit, alert_message="short_exit")</pre>
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <h3>📋 欄位說明</h3>
+                <div class="field-list">
+                    <div class="field-item">
+                        <span class="field-name">action</span>
+                        <span class="field-desc">交易動作（使用 <code>{{strategy.order.alert_message}}</code> 自動帶入）</span>
+                        <span class="badge badge-required">必填</span>
+                    </div>
+                    <div class="field-item">
+                        <span class="field-name">quantity</span>
+                        <span class="field-desc">交易口數（可用 <code>{{strategy.order.contracts}}</code> 或固定數字）</span>
+                        <span class="badge badge-required">必填</span>
+                    </div>
+                    <div class="field-item">
+                        <span class="field-name">symbol</span>
+                        <span class="field-desc">商品代碼（如 <code>MXFR1</code>、<code>MXF202601</code>）— 請使用「可用商品」頁面的 Symbol 欄位值</span>
+                        <span class="badge badge-required">必填</span>
+                    </div>
+                </div>
+                
+                <h3 style="margin-top: 1.5rem;">🎯 action 可用值</h3>
+                <div class="action-grid">
+                    <div class="action-item">
+                        <span class="action action-long_entry">long_entry</span>
+                        <span class="action-desc">做多進場 - 買入開倉</span>
+                    </div>
+                    <div class="action-item">
+                        <span class="action action-long_exit">long_exit</span>
+                        <span class="action-desc">做多出場 - 賣出平倉</span>
+                    </div>
+                    <div class="action-item">
+                        <span class="action action-short_entry">short_entry</span>
+                        <span class="action-desc">做空進場 - 賣出開倉</span>
+                    </div>
+                    <div class="action-item">
+                        <span class="action action-short_exit">short_exit</span>
+                        <span class="action-desc">做空出場 - 買入平倉</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <h3>🔄 TradingView 可用佔位符</h3>
+                <p style="color: #a1a1aa; margin: 0.5rem 0 1rem;">以下是 TradingView 警報中可使用的變數：</p>
+                <div class="var-list">
+                    <div class="var-item">
+                        <code>{{strategy.order.alert_message}}</code>
+                        <span class="var-desc">Pine Script 中 alert_message 參數的值</span>
+                    </div>
+                    <div class="var-item">
+                        <code>{{strategy.order.contracts}}</code>
+                        <span class="var-desc">委託的合約數量</span>
+                    </div>
+                    <div class="var-item">
+                        <code>{{strategy.order.action}}</code>
+                        <span class="var-desc">委託動作（buy/sell）</span>
+                    </div>
+                    <div class="var-item">
+                        <code>{{strategy.order.price}}</code>
+                        <span class="var-desc">委託價格</span>
+                    </div>
+                    <div class="var-item">
+                        <code>{{strategy.position_size}}</code>
+                        <span class="var-desc">目前持倉大小</span>
+                    </div>
+                    <div class="var-item">
+                        <code>{{ticker}}</code>
+                        <span class="var-desc">商品代碼</span>
+                    </div>
+                    <div class="var-item">
+                        <code>{{time}}</code>
+                        <span class="var-desc">警報觸發時間</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <h3>📌 警報訊息範例</h3>
+                
+                <h4 style="color: #00d9ff; margin: 1rem 0 0.5rem;">✨ 推薦：搭配 Pine Script 策略使用</h4>
+                <p style="color: #a1a1aa; margin: 0.5rem 0;">action 由策略自動帶入，quantity 使用策略設定的口數：</p>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyToClipboard(this, this.nextElementSibling.textContent)">複製</button>
+                    <pre>{"action": "{{strategy.order.alert_message}}", "quantity": {{strategy.order.contracts}}, "symbol": "MXFR1"}</pre>
+                </div>
+                
+                <h4 style="color: #a1a1aa; margin: 1.5rem 0 0.5rem;">📝 手動設定：固定值</h4>
+                <p style="color: #a1a1aa; margin: 0.5rem 0;">適用於簡單警報或指標觸發：</p>
+                <div class="example-grid">
+                    <div class="example-card">
+                        <h4>🟢 小台做多進場 1 口</h4>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyToClipboard(this, this.nextElementSibling.textContent)">複製</button>
+                            <pre>{"action": "long_entry", "quantity": 1, "symbol": "MXFR1"}</pre>
+                        </div>
+                    </div>
+                    <div class="example-card">
+                        <h4>🔵 小台做多出場</h4>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyToClipboard(this, this.nextElementSibling.textContent)">複製</button>
+                            <pre>{"action": "long_exit", "quantity": 1, "symbol": "MXFR1"}</pre>
+                        </div>
+                    </div>
+                    <div class="example-card">
+                        <h4>🔴 大台做空進場 2 口</h4>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyToClipboard(this, this.nextElementSibling.textContent)">複製</button>
+                            <pre>{"action": "short_entry", "quantity": 2, "symbol": "TXFR1"}</pre>
+                        </div>
+                    </div>
+                    <div class="example-card">
+                        <h4>🟡 大台做空出場</h4>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyToClipboard(this, this.nextElementSibling.textContent)">複製</button>
+                            <pre>{"action": "short_exit", "quantity": 2, "symbol": "TXFR1"}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <h3>⚠️ 注意事項</h3>
+                <div class="alert alert-warning">
+                    <ul style="margin: 0; padding-left: 1.5rem; line-height: 1.8;">
+                        <li>預設為<strong>模擬模式</strong>，如需實盤交易請在網址加上 <code>?simulation=false</code></li>
+                        <li>商品代碼請使用正確的期貨代碼（可在「委託紀錄」查看歷史使用的代碼）</li>
+                        <li>確保 JSON 格式正確，欄位名稱需使用<strong>雙引號</strong></li>
+                        <li>quantity 必須為正整數</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cache bust: bump version when files change -->
+    <script src="/static/js/dashboard.js?v=1"></script>
+</body>
+</html>

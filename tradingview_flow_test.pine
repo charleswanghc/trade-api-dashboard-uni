@@ -1,0 +1,166 @@
+//@version=5
+
+// =====================================================================
+// 流程驗證測試策略 (tradingview_flow_test.pine)
+//
+// 用途：快速驗證 TradingView → API /signal/simple → 統一期貨 整套流程
+//       涵蓋所有 4 種訊號組合：
+//         ① entry + buy  (做多進場)
+//         ② exit  + sell (做多出場)
+//         ③ entry + sell (做空進場)
+//         ④ exit  + buy  (做空出場)
+//
+// 使用方式：
+//   1. 載入到 TXFF5 1分鐘圖 → MA交叉頻繁，訊號快速觸發
+//   2. TradingView Alert 設定：
+//      - 條件：選擇此策略，Order fills only
+//      - 訊息：{{strategy.order.alert_message}}
+//      - Webhook URL：https://your-api-url/signal/simple
+//   3. 觀察 API /signals 記錄確認流程正常
+//
+// 注意：
+//   - 策略名稱需與後端 strategy_config.strategy_name 一致
+//   - Alert 僅在即時 K 棒觸發時發送 Webhook，回測標籤僅供目視確認
+//   - 測試完成後請停用此 Alert，避免誤觸正式下單
+// =====================================================================
+
+strategy("🧪 流程驗證測試", overlay=true, pyramiding=0,
+     default_qty_type=strategy.fixed, default_qty_value=1,
+     max_bars_back=100)
+
+// ==================== 設定參數 ====================
+strategyName = input.string(
+    "TXF_vivi",
+    title="策略名稱",
+    tooltip="必須與後端 strategy_config.strategy_name 完全一致")
+
+testQty = input.int(
+    1,
+    title="測試口數",
+    minval=1,
+    tooltip="傳送給 API 的 quantity 值，實際口數由後端乘數決定")
+
+fastLen = input.int(3,  title="快速 MA 週期", minval=2)
+slowLen = input.int(8,  title="慢速 MA 週期", minval=3)
+
+testLong  = input.bool(true,  title="✅ 測試做多方向 (① entry+buy / ② exit+sell)")
+testShort = input.bool(true,  title="✅ 測試做空方向 (③ entry+sell / ④ exit+buy)")
+
+// ==================== makeAlert 輔助函式 ====================
+// 產生符合 /signal/simple 端點的 JSON 訊息
+// 參數：
+//   action   - "entry" 或 "exit"
+//   side     - "buy"   或 "sell"
+//   price    - 觸發時的價格（整數）
+//   stopLoss - 止損價格，0 表示不傳送
+//   note     - 備註標籤（最長 10 字）
+makeAlert(action, side, price, stopLoss = 0.0, note = "") =>
+    msg = '{"strategy":"' + strategyName + '"'
+    msg := msg + ',"action":"'   + action + '"'
+    msg := msg + ',"side":"'     + side   + '"'
+    msg := msg + ',"quantity":'  + str.tostring(testQty)
+    msg := msg + ',"price":'     + str.tostring(math.round(price))
+    if stopLoss > 0
+        msg := msg + ',"stop_loss":' + str.tostring(math.round(stopLoss))
+    msg := msg + ',"note":"'     + note   + '"'
+    msg := msg + '}'
+    msg
+
+// ==================== 訊號計算 ====================
+fastMA = ta.sma(close, fastLen)
+slowMA = ta.sma(close, slowLen)
+
+plot(fastMA, title="快速 MA", color=color.new(color.blue,   20), linewidth=2)
+plot(slowMA, title="慢速 MA", color=color.new(color.orange, 20), linewidth=2)
+
+// 黃金交叉：快線由下往上穿越慢線 → 做多方向
+bullCross = ta.crossover(fastMA, slowMA)
+// 死亡交叉：快線由上往下穿越慢線 → 做空方向
+bearCross = ta.crossunder(fastMA, slowMA)
+
+isLong  = strategy.position_size > 0
+isShort = strategy.position_size < 0
+isFlat  = strategy.position_size == 0
+
+// ==================== ① 做多進場：entry + buy ====================
+if bullCross and isFlat and testLong
+    slPrice = ta.lowest(low, 5)   // 最近 5 根低點作為止損參考
+    strategy.entry("Long", strategy.long, qty=testQty,
+        comment="① entry+buy",
+        alert_message=makeAlert("entry", "buy", close, slPrice, "LongEntry"))
+    label.new(bar_index, low * 0.999,
+        text="① entry\nbuy",
+        style=label.style_label_up,
+        color=color.lime, textcolor=color.black, size=size.small)
+
+// ==================== ② 做多出場：exit + sell ====================
+if bearCross and isLong
+    strategy.close("Long",
+        comment="② exit+sell",
+        alert_message=makeAlert("exit", "sell", close, 0, "LongExit"))
+    label.new(bar_index, high * 1.001,
+        text="② exit\nsell",
+        style=label.style_label_down,
+        color=color.red, textcolor=color.white, size=size.small)
+
+// ==================== ③ 做空進場：entry + sell ====================
+if bearCross and isFlat and testShort
+    slPrice = ta.highest(high, 5)  // 最近 5 根高點作為止損參考
+    strategy.entry("Short", strategy.short, qty=testQty,
+        comment="③ entry+sell",
+        alert_message=makeAlert("entry", "sell", close, slPrice, "ShortEntry"))
+    label.new(bar_index, high * 1.001,
+        text="③ entry\nsell",
+        style=label.style_label_down,
+        color=color.maroon, textcolor=color.white, size=size.small)
+
+// ==================== ④ 做空出場：exit + buy ====================
+if bullCross and isShort
+    strategy.close("Short",
+        comment="④ exit+buy",
+        alert_message=makeAlert("exit", "buy", close, 0, "ShortExit"))
+    label.new(bar_index, low * 0.999,
+        text="④ exit\nbuy",
+        style=label.style_label_up,
+        color=color.blue, textcolor=color.white, size=size.small)
+
+// ==================== 資訊面板 ====================
+var table panel = table.new(position.top_right, 2, 8,
+    bgcolor=color.new(color.black, 55),
+    border_width=1, frame_color=color.gray, frame_width=1)
+
+if barstate.islast
+    table.cell(panel, 0, 0, "🧪 流程驗證設定",
+        text_color=color.white, text_size=size.normal,
+        bgcolor=color.new(color.navy, 40), colspan=2)
+
+    table.cell(panel, 0, 1, "策略名稱",       text_color=color.silver, text_size=size.small)
+    table.cell(panel, 1, 1, strategyName,     text_color=color.yellow, text_size=size.small)
+
+    table.cell(panel, 0, 2, "Webhook 端點",   text_color=color.silver, text_size=size.small)
+    table.cell(panel, 1, 2, "/signal/simple", text_color=color.aqua,   text_size=size.small)
+
+    table.cell(panel, 0, 3, "① entry + buy",
+        text_color=color.silver, text_size=size.small)
+    table.cell(panel, 1, 3, testLong ? "啟用 ✅" : "停用 ⬜",
+        text_color=testLong ? color.lime : color.gray, text_size=size.small)
+
+    table.cell(panel, 0, 4, "② exit  + sell",
+        text_color=color.silver, text_size=size.small)
+    table.cell(panel, 1, 4, testLong ? "啟用 ✅" : "停用 ⬜",
+        text_color=testLong ? color.lime : color.gray, text_size=size.small)
+
+    table.cell(panel, 0, 5, "③ entry + sell",
+        text_color=color.silver, text_size=size.small)
+    table.cell(panel, 1, 5, testShort ? "啟用 ✅" : "停用 ⬜",
+        text_color=testShort ? color.lime : color.gray, text_size=size.small)
+
+    table.cell(panel, 0, 6, "④ exit  + buy",
+        text_color=color.silver, text_size=size.small)
+    table.cell(panel, 1, 6, testShort ? "啟用 ✅" : "停用 ⬜",
+        text_color=testShort ? color.lime : color.gray, text_size=size.small)
+
+    posText = isLong ? "持多倉 📈" : isShort ? "持空倉 📉" : "無部位 ➖"
+    posColor = isLong ? color.lime : isShort ? color.red : color.gray
+    table.cell(panel, 0, 7, "目前部位",   text_color=color.silver, text_size=size.small)
+    table.cell(panel, 1, 7, posText,      text_color=posColor,     text_size=size.small)

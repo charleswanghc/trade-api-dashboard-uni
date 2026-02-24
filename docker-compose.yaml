@@ -1,0 +1,107 @@
+services:
+  # Database migration service - runs SQL migrations before api starts
+  # Uses PostgreSQL image directly for native psql access
+  db-migrate:
+    image: postgres:16-alpine
+    command: bash /db/migrate.sh
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: trade_api
+      PGHOST: db
+      PGPASSWORD: postgres
+      MIGRATIONS_DIR: /db/migrations
+    volumes:
+      - ./db:/db:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    # Internal only - exposed via nginx
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/trade_api
+    volumes:
+      # Mount source code for live updates (no rebuild needed)
+      - ./main.py:/app/main.py:ro
+      - ./database.py:/app/database.py:ro
+      - ./models.py:/app/models.py:ro
+      # Mount CA certificate for real trading
+      - ./certs:/app/certs:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+
+  # NGINX reverse proxy - handles incoming requests and forwards to API
+  # Starts as soon as API container starts (doesn't wait for healthy)
+  # IP whitelist is loaded from ALLOWED_IPS env var (comma-separated)
+  nginx:
+    image: nginx:alpine
+    entrypoint: ["/entrypoint.sh"]
+    command: ["nginx", "-g", "daemon off;"]
+    ports:
+      - "9879:80"
+    env_file:
+      - .env
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/entrypoint.sh:/entrypoint.sh:ro
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/nginx-health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 2s
+
+  # NGROK tunnel - exposes nginx to the internet
+  # Get your auth token from: https://dashboard.ngrok.com/get-started/your-authtoken
+  # Custom domain requires paid plan: https://dashboard.ngrok.com/cloud-edge/domains
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: http nginx:80 --log stdout ${NGROK_DOMAIN:+--domain=$NGROK_DOMAIN}
+    env_file:
+      - .env
+    ports:
+      - "4040:4040"  # NGROK web interface for tunnel info
+    depends_on:
+      api:
+        condition: service_started
+      nginx:
+        condition: service_started
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: trade_api
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d trade_api"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

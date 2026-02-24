@@ -1,0 +1,59 @@
+//@version=5
+strategy("My_Strategy_Simple", overlay=true, pyramiding=2)
+
+// ========== 策略設定（唯一需要設定的參數）==========
+strategyName = input.string("TXF_vivi", title="策略名稱",
+    tooltip="對應後端系統的策略設定")
+
+// ========== 您的策略參數（替換為您自己的參數）==========
+// param1 = input.int(...)
+// param2 = input.float(...)
+
+// ========== 您的策略指標計算（邏輯保留在您本機，此處不公開）==========
+// 請將您原本的指標計算程式碼放在這裡
+
+var series float lastMarketPosition = 0
+var float entryPrice = na
+entryPrice := strategy.opentrades.entry_price(strategy.opentrades - 1)
+lastMarketPosition := strategy.position_size
+
+// ========== makeAlert 輔助函式（核心）==========
+// 產生符合 /signal/simple 端點的 JSON 訊息
+makeAlert(action, side, price, stopLoss = 0.0, note = "") =>
+    msg = '{"strategy":"' + strategyName + '"'
+    msg := msg + ',"action":"'   + action + '"'
+    msg := msg + ',"side":"'     + side   + '"'
+    msg := msg + ',"quantity":1'
+    msg := msg + ',"price":' + str.tostring(math.round(price))
+    if stopLoss > 0
+        msg := msg + ',"stop_loss":' + str.tostring(math.round(stopLoss))
+    if note != ""
+        msg := msg + ',"note":"' + note + '"'
+    msg := msg + '}'
+    msg
+
+// ========== 做多進場：替換 /* ... */ 為您的條件 ==========
+if (/* 您的做多進場條件 */ false)
+    longEntryPrice = close  // 替換為您的實際進場價格
+    longStopLoss   = 0.0    // 替換為您的止損價格（選填）
+    strategy.entry("Buy", strategy.long, stop=longEntryPrice,
+        alert_message=makeAlert("entry", "buy", longEntryPrice, longStopLoss, "Buy"))
+
+// ========== 做空進場：替換 /* ... */ 為您的條件 ==========
+if (/* 您的做空進場條件 */ false)
+    shortEntryPrice = close  // 替換為您的實際進場價格
+    shortStopLoss   = 0.0    // 替換為您的止損價格（選填）
+    strategy.entry("Sell", strategy.short, stop=shortEntryPrice,
+        alert_message=makeAlert("entry", "sell", shortEntryPrice, shortStopLoss, "Sell"))
+
+// ========== 多單出場：替換 /* ... */ 為您的條件 ==========
+if (lastMarketPosition > 0 and /* 您的多單出場條件 */ false)
+    longExitStop = close  // 替換為您的實際停損價格
+    strategy.exit("Exit Long", stop=longExitStop,
+        alert_message=makeAlert("exit", "sell", close, 0, "ExitL"))
+
+// ========== 空單出場：替換 /* ... */ 為您的條件 ==========
+if (lastMarketPosition < 0 and /* 您的空單出場條件 */ false)
+    shortExitStop = close  // 替換為您的實際停損價格
+    strategy.exit("Exit Short", stop=shortExitStop,
+        alert_message=makeAlert("exit", "buy", close, 0, "ExitS"))

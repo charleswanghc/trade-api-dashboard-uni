@@ -1,0 +1,46 @@
+//@version=5
+strategy("My_Strategy", overlay=true, pyramiding=2)
+
+// ========== 您的策略參數（替換為您自己的參數）==========
+// param1 = input.int(...)
+// param2 = input.float(...)
+
+// ========== Webhook 設定參數 ==========
+productId      = input.string("TXFF5", title="商品代碼", tooltip="例如：TXFF5 (台指期近月)")
+orderQty       = input.int(1,    title="每次下單口數", minval=1)
+useMarketOrder = input.bool(false, title="使用市價單")
+
+// ========== 您的策略指標計算（邏輯保留在您本機，此處不公開）==========
+// 請將您原本的指標計算程式碼放在這裡
+// 例如：均線、價格通道、技術指標等
+
+var series float lastMarketPosition = 0
+var float entryPrice = na
+entryPrice := strategy.opentrades.entry_price(strategy.opentrades - 1)
+lastMarketPosition := strategy.position_size
+
+// ========== 做多進場：將您的進場條件替換 /* ... */ 的部分 ==========
+if (/* 您的做多進場條件 */ false)
+    longEntryPrice = close  // 替換為您的實際進場價格
+    strategy.entry("Buy", strategy.long, stop=longEntryPrice,
+        alert_message='{"productid":"' + productId + '","bs":"B","ordertype":"' + (useMarketOrder ? 'M' : 'L') + '","price":' + str.tostring(longEntryPrice) + ',"orderqty":' + str.tostring(orderQty) + ',"ordercondition":"R","opencloseflag":"","dtrade":"N","note":"Buy","strategy":"TXF_vivi"}')
+
+// ========== 做空進場：將您的進場條件替換 /* ... */ 的部分 ==========
+if (/* 您的做空進場條件 */ false)
+    shortEntryPrice = close  // 替換為您的實際進場價格
+    strategy.entry("Sell", strategy.short, stop=shortEntryPrice,
+        alert_message='{"productid":"' + productId + '","bs":"S","ordertype":"' + (useMarketOrder ? 'M' : 'L') + '","price":' + str.tostring(shortEntryPrice) + ',"orderqty":' + str.tostring(orderQty) + ',"ordercondition":"R","opencloseflag":"","dtrade":"N","note":"Sell","strategy":"TXF_vivi"}')
+
+// ========== 多單出場：將您的停損停利條件替換 /* ... */ 的部分 ==========
+if (lastMarketPosition > 0)
+    longStopPrice = close  // 替換為您的實際停損價格
+    if (/* 您的多單出場條件 */ false)
+        strategy.exit("Exit Long", stop=longStopPrice,
+            alert_message='{"productid":"' + productId + '","bs":"S","ordertype":"M","price":0,"orderqty":' + str.tostring(orderQty) + ',"ordercondition":"I","opencloseflag":"1","dtrade":"N","note":"ExitL","strategy":"TXF_vivi"}')
+
+// ========== 空單出場：將您的停損停利條件替換 /* ... */ 的部分 ==========
+if (lastMarketPosition < 0)
+    shortStopPrice = close  // 替換為您的實際停損價格
+    if (/* 您的空單出場條件 */ false)
+        strategy.exit("Exit Short", stop=shortStopPrice,
+            alert_message='{"productid":"' + productId + '","bs":"B","ordertype":"M","price":0,"orderqty":' + str.tostring(orderQty) + ',"ordercondition":"I","opencloseflag":"1","dtrade":"N","note":"ExitS","strategy":"TXF_vivi"}')
