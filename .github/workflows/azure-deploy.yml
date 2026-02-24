@@ -74,3 +74,4 @@ jobs:
           action: "upload"
           app_location: "frontend"
           output_location: "dist/futures-dashboard"
+          skip_app_build: true
