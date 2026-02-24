@@ -110,6 +110,15 @@ class StrategyConfigRequest(BaseModel):
 app = FastAPI()
 
 cors_origins = os.getenv("CORS_ORIGINS", "*")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """啟動時自動建立所有資料表（冪等操作，不影響既有資料）"""
+    from models import Base
+    from database import engine
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables created/verified")
 origins = [o.strip() for o in cors_origins.split(",") if o.strip()] or ["*"]
 
 app.add_middleware(
