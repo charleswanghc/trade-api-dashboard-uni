@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import OrderHistory, StrategyConfig, SignalHistory, SignalType
 
-from unitrade.dtrade_data import DOrderObject
+from unitrade.trade.ddata import DOrderObject
 
 from unitrade_client import (
     UnitradeLoginError,
