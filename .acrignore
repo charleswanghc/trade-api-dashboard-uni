@@ -1,0 +1,36 @@
+# ACR build context - exclude non-backend files
+.git
+.gitignore
+.acrignore
+
+# Frontend (not needed for backend image)
+frontend/
+node_modules/
+
+# Docs
+docs/
+
+# Test files
+test_minimal.py
+Dockerfile.test
+*.bak
+*.log
+
+# Static files (not in Dockerfile COPY)
+static/
+nginx/
+
+# DB migrations (not needed in image)
+db/
+
+# CI/CD
+.github/
+
+# Local dev
+.env
+.env.*
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
