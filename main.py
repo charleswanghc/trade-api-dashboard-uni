@@ -529,11 +529,22 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check():
+    """Quick health check - does not test Unitrade connection to avoid timeout"""
+    return {
+        "status": "ok",
+        "service": "trade-api",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.get("/health/unitrade")
+def unitrade_health_check():
+    """Check Unitrade API connection (may be slow on first call)"""
     try:
         _ = get_unitrade_client()
         return {"status": "ok", "unitrade": "connected"}
     except Exception as exc:
-        return {"status": "degraded", "unitrade": "error", "error": str(exc)}
+        return {"status": "error", "unitrade": "disconnected", "error": str(exc)}
 
 
 @app.post("/webhook", response_model=OrderResponse)
