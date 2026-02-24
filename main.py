@@ -133,6 +133,17 @@ def health_check():
     }
 
 
+@app.get("/health/db")
+def db_health_check(db: Session = Depends(get_db)):
+    """Check database connectivity"""
+    try:
+        from sqlalchemy import text
+        db.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception as exc:
+        return {"status": "error", "database": "disconnected", "error": str(exc)}
+
+
 @app.get("/health/unitrade")
 def unitrade_health_check():
     """Check Unitrade API connection (may be slow on first call)"""
