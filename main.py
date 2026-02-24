@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import OrderHistory, StrategyConfig, SignalHistory, SignalType
+
 from unitrade.dtrade_data import DOrderObject
 
 from unitrade_client import (
@@ -21,6 +22,7 @@ from unitrade_client import (
 
 logger = logging.getLogger(__name__)
 
+# ==================== Pydantic Models ====================
 
 class OrderRequest(BaseModel):
     actno: Optional[str] = None
@@ -103,12 +105,55 @@ class StrategyConfigRequest(BaseModel):
     description: Optional[str] = None
 
 
+# ==================== FastAPI App ====================
+
+app = FastAPI()
+
+cors_origins = os.getenv("CORS_ORIGINS", "*")
+origins = [o.strip() for o in cors_origins.split(",") if o.strip()] or ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ==================== Health Check ====================
+
+@app.get("/health")
+def health_check():
+    """Quick health check - does not test Unitrade connection to avoid timeout"""
+    return {
+        "status": "ok",
+        "service": "trade-api",
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+@app.get("/health/unitrade")
+def unitrade_health_check():
+    """Check Unitrade API connection (may be slow on first call)"""
+    try:
+        _ = get_unitrade_client()
+        return {"status": "ok", "unitrade": "connected"}
+    except Exception as exc:
+        return {"status": "error", "unitrade": "disconnected", "error": str(exc)}
+
+
+# ==================== 下單核心函式 ====================
+
 def submit_unitrade_order(
     payload: OrderRequest,
     db: Session,
     source: str,
 ) -> OrderResponse:
-    logger.info("Order request received: source=%s productid=%s bs=%s qty=%s", source, payload.productid, payload.bs, payload.orderqty)
+    logger.info(
+        "Order request received: source=%s productid=%s bs=%s qty=%s",
+        source, payload.productid, payload.bs, payload.orderqty,
+    )
     actno = payload.actno or os.getenv("UNITRADE_ACTNO")
     if not actno:
         raise HTTPException(status_code=400, detail="缺少 actno (帳號)")
@@ -161,59 +206,69 @@ def submit_unitrade_order(
         order_record.error_message = str(exc)
         order_record.updated_at = datetime.utcnow()
         db.commit()
-        raise HTTPException(status_code=500, detail=str(exc)) from exc@app.post("/signal/simple", response_model=SignalResponse)
-def process_simple_signal(
-    signal: SimpleSignalRequest,
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    order_id = extract_order_id(result) or getattr(result, "seq", None)
+    order_record.order_id = order_id
+    order_record.status = "submitted"
+    order_record.order_result = serialize_order_result(result)
+    order_record.updated_at = datetime.utcnow()
+    db.commit()
+
+    result_dict = None
+    if isinstance(result, dict):
+        result_dict = result
+
+    return OrderResponse(status="ok", order_id=order_id, result=result_dict)
+
+
+# ==================== Webhook & Order API ====================
+
+@app.post("/webhook", response_model=OrderResponse)
+def tradingview_webhook(
+    payload: OrderRequest,
     db: Session = Depends(get_db),
 ):
-    """
-    處理極簡訊號 - 適用於 TradingView Alert 佔位符
-    
-    範例訊號：
-    {
-        "strategy": "TXF_vivi_mini",
-        "action": "entry",
-        "side": "buy",
-        "quantity": 1,
-        "price": 21500,
-        "stop_loss": 21400
-    }
-    """
-    logger.info("Simple signal received: strategy=%s action=%s side=%s qty=%s", 
-                signal.strategy, signal.action, signal.side, signal.quantity)
-    
-    # 轉換為標準訊號格式
-    if signal.action == "entry":
-        if signal.side == "buy":
-            signal_type = "long_entry"
-        else:
-            signal_type = "short_entry"
-    else:  # exit
-        if signal.side == "sell":
-            signal_type = "long_exit"
-        else:
-            signal_type = "short_exit"
-    
-    # 建立標準訊號請求
-    standard_signal = SignalRequest(
-        strategy=signal.strategy,
-        signal=signal_type,
-        quantity=signal.quantity,
-        price=signal.price,
-        note=signal.note or f"{signal.action}_{signal.side}"
-    )
-    
-    # 使用標準訊號處理流程
-    return process_signal(standard_signal, db)
+    """TradingView Webhook 直接下單端點"""
+    return submit_unitrade_order(payload, db, source="webhook")
 
-signal", response_model=SignalResponse)
+
+@app.post("/order", response_model=OrderResponse)
+def manual_order(
+    payload: OrderRequest,
+    db: Session = Depends(get_db),
+):
+    """手動下單端點"""
+    return submit_unitrade_order(payload, db, source="manual")
+
+
+@app.get("/orders")
+def list_orders(
+    db: Session = Depends(get_db),
+    limit: int = 100,
+    offset: int = 0,
+):
+    """列出訂單歷史"""
+    orders = (
+        db.query(OrderHistory)
+        .order_by(OrderHistory.created_at.desc())
+        .offset(offset)
+        .limit(min(limit, 1000))
+        .all()
+    )
+    return [o.to_dict() for o in orders]
+
+
+# ==================== 訊號處理 API ====================
+
+@app.post("/signal", response_model=SignalResponse)
 def process_signal(
     signal: SignalRequest,
     db: Session = Depends(get_db),
 ):
     """
     處理 TradingView 訊號 - 根據策略設定自動轉換為實際訂單
-    
+
     範例訊號：
     {
         "strategy": "TXF_vivi_mini",
@@ -223,15 +278,17 @@ def process_signal(
         "note": "Buy"
     }
     """
-    logger.info("Signal received: strategy=%s signal=%s qty=%s", signal.strategy, signal.signal, signal.quantity)
-    
+    logger.info(
+        "Signal received: strategy=%s signal=%s qty=%s",
+        signal.strategy, signal.signal, signal.quantity,
+    )
+
     # 查詢策略設定
     strategy_config = db.query(StrategyConfig).filter(
         StrategyConfig.strategy_name == signal.strategy
     ).first()
-    
+
     if not strategy_config:
-        # 記錄失敗的訊號
         signal_record = SignalHistory(
             strategy_name=signal.strategy,
             signal_type=signal.signal,
@@ -246,7 +303,7 @@ def process_signal(
         db.add(signal_record)
         db.commit()
         raise HTTPException(status_code=404, detail=f"未找到策略設定: {signal.strategy}")
-    
+
     if not strategy_config.enabled:
         signal_record = SignalHistory(
             strategy_name=signal.strategy,
@@ -263,17 +320,134 @@ def process_signal(
         db.commit()
         return SignalResponse(
             status="ignored",
-            message=f"策略 '{signal.strategy}' 已停用"
+            message=f"策略 '{signal.strategy}' 已停用",
         )
-    
+
     # 計算實際下單參數
     actual_product = strategy_config.target_product
     actual_quantity = signal.quantity * strategy_config.quantity_multiplier
-    
+
     # 判斷買賣方向
     if signal.signal in ("long_entry", "short_exit"):
         actual_bs = "B"
     else:  # long_exit, short_entry
+        actual_bs = "S"
+
+    # 判斷是進場還是出場
+    is_entry = signal.signal in ("long_entry", "short_entry")
+
+    # 選擇對應的訂單類型和條件
+    if is_entry:
+        order_type = strategy_config.entry_order_type
+        order_condition = strategy_config.entry_order_condition
+        open_close_flag = ""  # 進場
+    else:
+        order_type = strategy_config.exit_order_type
+        order_condition = strategy_config.exit_order_condition
+        open_close_flag = "1"  # 出場
+
+    # 處理價格
+    if order_type == "L" and signal.price:
+        actual_price = signal.price
+    else:
+        actual_price = 0  # 市價單
+
+    # 建立訂單請求
+    order_payload = OrderRequest(
+        actno=strategy_config.account,
+        subactno=strategy_config.sub_account or "",
+        productid=actual_product,
+        bs=actual_bs,
+        ordertype=order_type,
+        price=actual_price,
+        orderqty=actual_quantity,
+        ordercondition=order_condition,
+        opencloseflag=open_close_flag,
+        dtrade=strategy_config.dtrade or "N",
+        note=signal.note or signal.signal,
+        strategy=signal.strategy,
+    )
+
+    # 記錄訊號
+    signal_record = SignalHistory(
+        strategy_name=signal.strategy,
+        signal_type=signal.signal,
+        signal_product=signal.product,
+        signal_quantity=signal.quantity,
+        signal_price=signal.price,
+        signal_note=signal.note,
+        actual_product=actual_product,
+        actual_quantity=actual_quantity,
+        actual_bs=actual_bs,
+        status="processing",
+        raw_payload=signal.model_dump(),
+    )
+    db.add(signal_record)
+    db.commit()
+    db.refresh(signal_record)
+
+    # 提交訂單
+    try:
+        order_response = submit_unitrade_order(order_payload, db, source="signal")
+
+        signal_record.status = "processed"
+        signal_record.order_id = order_response.order_id
+        db.commit()
+
+        return SignalResponse(
+            status="ok",
+            signal_id=signal_record.id,
+            order_id=order_response.order_id,
+            message=f"訊號已處理：{actual_product} {actual_bs} {actual_quantity}口",
+            actual_product=actual_product,
+            actual_quantity=actual_quantity,
+        )
+
+    except Exception as exc:
+        signal_record.status = "failed"
+        signal_record.error_message = str(exc)
+        db.commit()
+        raise
+
+
+@app.post("/signal/simple", response_model=SignalResponse)
+def process_simple_signal(
+    signal: SimpleSignalRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    處理極簡訊號 - 適用於 TradingView Alert 佔位符
+
+    範例訊號：
+    {
+        "strategy": "TXF_vivi_mini",
+        "action": "entry",
+        "side": "buy",
+        "quantity": 1,
+        "price": 21500,
+        "stop_loss": 21400
+    }
+    """
+    logger.info(
+        "Simple signal received: strategy=%s action=%s side=%s qty=%s",
+        signal.strategy, signal.action, signal.side, signal.quantity,
+    )
+
+    # 轉換為標準訊號格式
+    if signal.action == "entry":
+        signal_type = "long_entry" if signal.side == "buy" else "short_entry"
+    else:  # exit
+        signal_type = "long_exit" if signal.side == "sell" else "short_exit"
+
+    standard_signal = SignalRequest(
+        strategy=signal.strategy,
+        signal=signal_type,
+        quantity=signal.quantity,
+        price=signal.price,
+        note=signal.note or f"{signal.action}_{signal.side}",
+    )
+
+    return process_signal(standard_signal, db)
 
 
 # ==================== 策略管理 API ====================
@@ -311,13 +485,12 @@ def create_strategy(
     db: Session = Depends(get_db),
 ):
     """建立新策略設定"""
-    # 檢查是否已存在
     existing = db.query(StrategyConfig).filter(
         StrategyConfig.strategy_name == config.strategy_name
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="策略名稱已存在")
-    
+
     strategy = StrategyConfig(**config.model_dump())
     db.add(strategy)
     db.commit()
@@ -338,12 +511,11 @@ def update_strategy(
     ).first()
     if not strategy:
         raise HTTPException(status_code=404, detail="未找到策略")
-    
-    # 更新欄位
+
     for key, value in config.model_dump().items():
-        if key != "strategy_name":  # 不允許修改策略名稱
+        if key != "strategy_name":
             setattr(strategy, key, value)
-    
+
     strategy.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(strategy)
@@ -362,7 +534,7 @@ def delete_strategy(
     ).first()
     if not strategy:
         raise HTTPException(status_code=404, detail="未找到策略")
-    
+
     db.delete(strategy)
     db.commit()
     logger.info("Strategy deleted: %s", strategy_name)
@@ -380,7 +552,7 @@ def toggle_strategy(
     ).first()
     if not strategy:
         raise HTTPException(status_code=404, detail="未找到策略")
-    
+
     strategy.enabled = not strategy.enabled
     strategy.updated_at = datetime.utcnow()
     db.commit()
@@ -402,7 +574,6 @@ def list_signals(
     query = db.query(SignalHistory).order_by(SignalHistory.created_at.desc())
     if strategy:
         query = query.filter(SignalHistory.strategy_name == strategy)
-    
     signals = query.offset(offset).limit(min(limit, 1000)).all()
     return [s.to_dict() for s in signals]
 
@@ -417,163 +588,3 @@ def get_signal(
     if not signal:
         raise HTTPException(status_code=404, detail="未找到訊號記錄")
     return signal.to_dict()
-
-        actual_bs = "S"
-    
-    # 判斷是進場還是出場
-    is_entry = signal.signal in ("long_entry", "short_entry")
-    
-    # 選擇對應的訂單類型和條件
-    if is_entry:
-        order_type = strategy_config.entry_order_type
-        order_condition = strategy_config.entry_order_condition
-        open_close_flag = ""  # 進場
-    else:
-        order_type = strategy_config.exit_order_type
-        order_condition = strategy_config.exit_order_condition
-        open_close_flag = "1"  # 出場
-    
-    # 處理價格
-    if order_type == "L" and signal.price:
-        actual_price = signal.price
-    else:
-        actual_price = 0  # 市價單
-    
-    # 建立訂單請求
-    order_payload = OrderRequest(
-        actno=strategy_config.account,
-        subactno=strategy_config.sub_account or "",
-        productid=actual_product,
-        bs=actual_bs,
-        ordertype=order_type,
-        price=actual_price,
-        orderqty=actual_quantity,
-        ordercondition=order_condition,
-        opencloseflag=open_close_flag,
-        dtrade=strategy_config.dtrade or "N",
-        note=signal.note or signal.signal,
-        strategy=signal.strategy,
-    )
-    
-    # 記錄訊號
-    signal_record = SignalHistory(
-        strategy_name=signal.strategy,
-        signal_type=signal.signal,
-        signal_product=signal.product,
-        signal_quantity=signal.quantity,
-        signal_price=signal.price,
-        signal_note=signal.note,
-        actual_product=actual_product,
-        actual_quantity=actual_quantity,
-        actual_bs=actual_bs,
-        status="processing",
-        raw_payload=signal.model_dump(),
-    )
-    db.add(signal_record)
-    db.commit()
-    db.refresh(signal_record)
-    
-    # 提交訂單
-    try:
-        order_response = submit_unitrade_order(order_payload, db, source="signal")
-        
-        # 更新訊號記錄
-        signal_record.status = "processed"
-        signal_record.order_id = order_response.order_id
-        db.commit()
-        
-        return SignalResponse(
-            status="ok",
-            signal_id=signal_record.id,
-            order_id=order_response.order_id,
-            message=f"訊號已處理：{actual_product} {actual_bs} {actual_quantity}口",
-            actual_product=actual_product,
-            actual_quantity=actual_quantity,
-        )
-    
-    except Exception as exc:
-        signal_record.status = "failed"
-        signal_record.error_message = str(exc)
-        db.commit()
-        raise
-
-
-@app.post("/
-    order_id = extract_order_id(result) or getattr(result, "seq", None)
-    order_record.order_id = order_id
-    order_record.status = "submitted"
-    order_record.order_result = serialize_order_result(result)
-    order_record.updated_at = datetime.utcnow()
-    db.commit()
-
-    result_dict = None
-    if isinstance(result, dict):
-        result_dict = result
-
-    return OrderResponse(status="ok", order_id=order_id, result=result_dict)
-
-
-app = FastAPI()
-
-cors_origins = os.getenv("CORS_ORIGINS", "*")
-origins = [o.strip() for o in cors_origins.split(",") if o.strip()] or ["*"]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
-
-@app.get("/health")
-def health_check():
-    """Quick health check - does not test Unitrade connection to avoid timeout"""
-    return {
-        "status": "ok",
-        "service": "trade-api",
-        "timestamp": datetime.utcnow().isoformat()
-    }
-
-
-@app.get("/health/unitrade")
-def unitrade_health_check():
-    """Check Unitrade API connection (may be slow on first call)"""
-    try:
-        _ = get_unitrade_client()
-        return {"status": "ok", "unitrade": "connected"}
-    except Exception as exc:
-        return {"status": "error", "unitrade": "disconnected", "error": str(exc)}
-
-
-@app.post("/webhook", response_model=OrderResponse)
-def tradingview_webhook(
-    payload: OrderRequest,
-    db: Session = Depends(get_db),
-):
-    return submit_unitrade_order(payload, db, source="webhook")
-
-
-@app.post("/order", response_model=OrderResponse)
-def manual_order(
-    payload: OrderRequest,
-    db: Session = Depends(get_db),
-):
-    return submit_unitrade_order(payload, db, source="manual")
-
-
-@app.get("/orders")
-def list_orders(
-    db: Session = Depends(get_db),
-    limit: int = 100,
-    offset: int = 0,
-):
-    orders = (
-        db.query(OrderHistory)
-        .order_by(OrderHistory.created_at.desc())
-        .offset(offset)
-        .limit(min(limit, 1000))
-        .all()
-    )
-    return [o.to_dict() for o in orders]
