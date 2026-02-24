@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ApiService, SignalHistory } from '../services/api.service';
 
 @Component({
   selector: 'app-alerts',
@@ -7,9 +8,85 @@ import { CommonModule } from '@angular/common';
   imports: [CommonModule],
   template: `
     <div class="card">
-      <h2>錯誤與通知</h2>
-      <p style="color: var(--muted);">此頁面用於顯示系統錯誤與通知，目前尚未串接。</p>
+      <div class="card-header">
+        <div class="card-title">訊號接收記錄</div>
+        <button class="btn secondary" (click)="loadSignals()" style="font-size: 12px; padding: 5px 12px">
+          ↺ 重新整理
+        </button>
+      </div>
+
+      <ng-container *ngIf="!loading; else loadingTpl">
+        <ng-container *ngIf="signals.length > 0; else emptyTpl">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>時間</th>
+                <th>策略</th>
+                <th>訊號類型</th>
+                <th>商品</th>
+                <th>數量</th>
+                <th>委託單號</th>
+                <th>狀態</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let s of signals">
+                <td class="text-muted" style="font-size: 12px">#{{ s.id }}</td>
+                <td class="text-muted" style="font-family: monospace; font-size: 12px; white-space: nowrap">
+                  {{ s.created_at | date:'yyyy/MM/dd HH:mm:ss' }}
+                </td>
+                <td style="font-weight: 600">{{ s.strategy_name }}</td>
+                <td>
+                  <span class="badge" [ngClass]="getSignalClass(s.signal_type)">{{ s.signal_type }}</span>
+                </td>
+                <td>{{ s.actual_product || s.signal_product || '—' }}</td>
+                <td>{{ s.actual_quantity ?? s.signal_quantity ?? '—' }}</td>
+                <td style="font-family: monospace; font-size: 11px" class="text-muted">
+                  {{ s.order_id || '—' }}
+                </td>
+                <td>
+                  <span class="badge"
+                    [ngClass]="s.status === 'success' ? 'success' : (s.status === 'error' ? 'error' : 'info')">
+                    {{ s.status }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </ng-container>
+        <ng-template #emptyTpl>
+          <div class="empty-state">尚無訊號記錄</div>
+        </ng-template>
+      </ng-container>
+
+      <ng-template #loadingTpl>
+        <div class="loading-row">載入中…</div>
+      </ng-template>
     </div>
   `
 })
-export class AlertsComponent {}
+export class AlertsComponent implements OnInit {
+  signals: SignalHistory[] = [];
+  loading = true;
+
+  constructor(private api: ApiService) {}
+
+  ngOnInit(): void {
+    this.loadSignals();
+  }
+
+  loadSignals(): void {
+    this.loading = true;
+    this.api.getSignals(100).subscribe({
+      next: d => { this.signals = d; this.loading = false; },
+      error: () => { this.signals = []; this.loading = false; },
+    });
+  }
+
+  getSignalClass(type: string): string {
+    if (type?.includes('entry')) return 'success';
+    if (type?.includes('exit')) return 'warning';
+    return 'info';
+  }
+}

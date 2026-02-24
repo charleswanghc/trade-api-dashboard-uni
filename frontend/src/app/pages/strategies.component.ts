@@ -216,50 +216,55 @@ import { ApiService, StrategyConfig } from '../services/api.service';
   `,
   styles: [`
     .container {
-      padding: 20px;
-      max-width: 1400px;
-      margin: 0 auto;
+      padding: 0;
     }
 
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 30px;
+      margin-bottom: 22px;
     }
 
     .header h1 {
       margin: 0;
-      font-size: 28px;
+      font-size: 20px;
+      font-weight: 700;
     }
 
     .form-card {
-      background: white;
-      border-radius: 8px;
-      padding: 30px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      margin-bottom: 30px;
+      background: var(--panel);
+      border: 1px solid var(--primary);
+      border-radius: 12px;
+      padding: 22px;
+      box-shadow: 0 0 22px var(--primary-glow);
+      margin-bottom: 22px;
     }
 
     .form-card h2 {
       margin-top: 0;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
+      font-size: 16px;
+      font-weight: 700;
     }
 
     .form-card h3 {
-      margin-top: 25px;
-      margin-bottom: 15px;
-      font-size: 18px;
-      color: #555;
-      border-bottom: 2px solid #e0e0e0;
-      padding-bottom: 5px;
+      margin-top: 18px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
     }
 
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      margin-bottom: 20px;
+      gap: 14px;
+      margin-bottom: 14px;
     }
 
     .form-group {
@@ -268,204 +273,220 @@ import { ApiService, StrategyConfig } from '../services/api.service';
     }
 
     .form-group label {
+      font-size: 10px;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
       margin-bottom: 5px;
-      color: #333;
+      color: var(--muted);
     }
 
     .form-group input,
     .form-group select {
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 14px;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      background: var(--panel-2);
+      color: var(--text);
+      transition: border-color 0.15s;
     }
 
     .form-group input:focus,
     .form-group select:focus {
       outline: none;
-      border-color: #4CAF50;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
     }
 
     .form-group input:disabled {
-      background: #f5f5f5;
+      opacity: 0.45;
       cursor: not-allowed;
     }
 
     .form-group small {
-      margin-top: 5px;
-      color: #666;
-      font-size: 12px;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
     }
 
     .form-actions {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
-      margin-top: 30px;
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
     }
 
     .strategies-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 14px;
     }
 
     .strategy-card {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      transition: transform 0.2s, box-shadow 0.2s;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     .strategy-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      border-color: rgba(34, 211, 238, 0.3);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     }
 
     .strategy-card.disabled {
-      opacity: 0.6;
-      background: #f5f5f5;
+      opacity: 0.5;
     }
 
     .strategy-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 15px;
+      margin-bottom: 12px;
       padding-bottom: 10px;
-      border-bottom: 2px solid #e0e0e0;
+      border-bottom: 1px solid var(--border);
     }
 
     .strategy-header h3 {
       margin: 0;
-      font-size: 18px;
-      color: #333;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: normal;
+      border: none;
+      padding: 0;
     }
 
     .strategy-actions {
       display: flex;
-      gap: 5px;
+      gap: 4px;
     }
 
     .strategy-info {
-      margin-bottom: 15px;
+      margin-bottom: 12px;
     }
 
     .info-row {
       display: flex;
-      margin-bottom: 8px;
-      font-size: 14px;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 13px;
     }
 
     .info-row .label {
-      font-weight: 600;
-      color: #666;
-      min-width: 90px;
+      font-size: 11px;
+      color: var(--muted);
+      min-width: 80px;
     }
 
     .info-row .value {
-      color: #333;
+      color: var(--text);
     }
 
     .info-row .value.highlight {
-      color: #4CAF50;
-      font-weight: bold;
-      font-size: 16px;
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 15px;
     }
 
     .badge {
-      background: #4CAF50;
-      color: white;
+      background: rgba(52, 211, 153, 0.14);
+      color: var(--success);
       padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
     }
 
     .strategy-footer {
       display: flex;
       justify-content: space-between;
       padding-top: 10px;
-      border-top: 1px solid #e0e0e0;
-      font-size: 12px;
-      color: #999;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
     }
 
     .btn {
-      padding: 10px 20px;
+      padding: 8px 14px;
       border: none;
-      border-radius: 4px;
+      border-radius: 8px;
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      transition: background 0.2s;
+      font-size: 13px;
+      font-weight: 700;
+      transition: opacity 0.15s;
     }
 
     .btn-primary {
-      background: #4CAF50;
-      color: white;
+      background: var(--primary);
+      color: #0d1117;
     }
 
-    .btn-primary:hover {
-      background: #45a049;
-    }
+    .btn-primary:hover { opacity: 0.85; }
 
     .btn-secondary {
-      background: #e0e0e0;
-      color: #333;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
     }
 
-    .btn-secondary:hover {
-      background: #d0d0d0;
-    }
+    .btn-secondary:hover { opacity: 0.85; }
 
     .btn-icon {
       background: none;
-      border: none;
+      border: 1px solid var(--border);
       cursor: pointer;
-      font-size: 18px;
-      padding: 5px;
-      border-radius: 4px;
-      transition: background 0.2s;
+      font-size: 14px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.15s;
     }
 
     .btn-icon:hover {
-      background: #f0f0f0;
+      background: var(--panel-2);
     }
 
     .btn-icon.active {
-      color: #4CAF50;
+      color: var(--success);
+      border-color: rgba(52, 211, 153, 0.3);
     }
 
     .btn-icon.danger:hover {
-      background: #ffebee;
-      color: #f44336;
+      background: rgba(248, 113, 113, 0.12);
+      border-color: rgba(248, 113, 113, 0.3);
     }
 
     .empty-state {
       text-align: center;
-      padding: 60px 20px;
-      color: #999;
+      padding: 56px 20px;
+      color: var(--muted);
     }
 
     .empty-state p {
-      font-size: 18px;
-      margin-bottom: 20px;
+      font-size: 15px;
+      margin-bottom: 18px;
+      color: var(--muted);
     }
 
     .loading {
       text-align: center;
-      padding: 40px;
-      color: #999;
+      padding: 36px;
+      color: var(--muted);
     }
 
     .error {
-      background: #ffebee;
-      color: #c62828;
-      padding: 15px;
-      border-radius: 4px;
-      margin-top: 20px;
+      background: rgba(248, 113, 113, 0.08);
+      color: var(--danger);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-top: 14px;
+      font-size: 13px;
     }
   `]
 })

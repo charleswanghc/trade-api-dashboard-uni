@@ -7,9 +7,10 @@ let symbols = [];
 let currentTab = 'orders';
 
 // URLs
-const baseUrl = window.location.origin;
-const webhookUrl = baseUrl + '/order';
-const webhookUrlReal = baseUrl + '/order?simulation=false';
+// 使用 Azure 部署的後端 API
+const baseUrl = 'https://trade-api-backend.calmbeach-e69a7a95.eastasia.azurecontainerapps.io';
+const webhookUrl = baseUrl + '/webhook';
+const webhookUrlReal = baseUrl + '/webhook?simulation=false';
 
 // Labels
 const actionIcons = { 
