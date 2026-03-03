@@ -9,7 +9,7 @@ on:
 env:
   AZURE_RESOURCE_GROUP: trade-api-rg
   AZURE_LOCATION: eastasia
-  ACR_NAME: tradeacr  # 請替換為您的 ACR 名稱
+  ACR_NAME: tradeacr3633
   CONTAINER_APP_NAME: trade-api-backend
   STATIC_WEB_APP_NAME: trade-dashboard
 
@@ -25,16 +25,13 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Log in to Azure Container Registry
+      - name: Build and push Docker image via ACR
         run: |
-          az acr login --name ${{ env.ACR_NAME }}
-
-      - name: Build and push Docker image
-        run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/trade-api:${{ github.sha }} .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/trade-api:${{ github.sha }}
-          docker tag ${{ env.ACR_NAME }}.azurecr.io/trade-api:${{ github.sha }} ${{ env.ACR_NAME }}.azurecr.io/trade-api:latest
-          docker push ${{ env.ACR_NAME }}.azurecr.io/trade-api:latest
+          az acr build \
+            --registry ${{ env.ACR_NAME }} \
+            --image trade-api:${{ github.sha }} \
+            --image trade-api:latest \
+            .
 
       - name: Deploy to Azure Container Apps
         run: |
