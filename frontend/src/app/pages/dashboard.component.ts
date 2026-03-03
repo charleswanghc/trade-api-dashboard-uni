@@ -21,8 +21,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   strategyCount: number | null = null;
   todaySignals: number | null = null;
   recentSignals: any[] = [];
+  unitradeStatus: string | null = null;
 
   private healthPoll?: Subscription;
+  private unitradePoll?: Subscription;
 
   constructor(private api: ApiService) {}
 
@@ -43,6 +45,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.healthError = false;
           this.health = d;
         }
+      });
+
+    // 每 60 秒輪詢一次 Unitrade 連線狀態
+    this.unitradePoll = timer(0, 60_000)
+      .pipe(
+        switchMap(() =>
+          this.api.healthUnitrade().pipe(catchError(() => of({ unitrade: 'disconnected' })))
+        )
+      )
+      .subscribe(d => {
+        this.unitradeStatus = (d as any)?.unitrade ?? 'disconnected';
       });
 
     // 只在進入頁面時載入一次
@@ -67,6 +80,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.healthPoll?.unsubscribe();
+    this.unitradePoll?.unsubscribe();
   }
 
   getSignalClass(type: string): string {

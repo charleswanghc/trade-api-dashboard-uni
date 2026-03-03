@@ -93,6 +93,10 @@ export class ApiService {
     return this.http.get<Record<string, unknown>>('/health').pipe(timeout(5000));
   }
 
+  healthUnitrade() {
+    return this.http.get<Record<string, unknown>>('/health/unitrade').pipe(timeout(10000));
+  }
+
   listOrders() {
     return this.http.get<any[]>('/orders');
   }

@@ -18,10 +18,10 @@
     <div class="stat-body">
       <div class="stat-label">Unitrade 連線</div>
       <div class="stat-value"
-        [class.text-success]="!healthError && health?.unitrade === 'connected'"
-        [class.text-danger]="healthError || (health && health.unitrade !== 'connected')"
-        [class.text-muted]="!healthError && !health">
-        {{ healthError ? '離線' : (health?.unitrade ?? '…') }}
+        [class.text-success]="unitradeStatus === 'connected'"
+        [class.text-danger]="unitradeStatus !== null && unitradeStatus !== 'connected'"
+        [class.text-muted]="unitradeStatus === null">
+        {{ unitradeStatus ?? '…' }}
       </div>
     </div>
   </div>
@@ -63,8 +63,8 @@
       </div>
       <div class="info-row">
         <span class="info-label">Unitrade</span>
-        <span class="badge" [ngClass]="health.unitrade === 'connected' ? 'success' : 'error'">
-          {{ health.unitrade }}
+        <span class="badge" [ngClass]="unitradeStatus === 'connected' ? 'success' : 'error'">
+          {{ unitradeStatus ?? '—' }}
         </span>
       </div>
     </ng-container>
