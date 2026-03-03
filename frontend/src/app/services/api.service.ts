@@ -148,4 +148,13 @@ export class ApiService {
   sendSignal(signal: SignalRequest) {
     return this.http.post<any>('/signal', signal);
   }
+
+  // ========== Product Lookup ==========
+  getProductLookupTw() {
+    return this.http.get<any[]>('/product-lookup/tw');
+  }
+
+  getProductLookupForeign() {
+    return this.http.get<any[]>('/product-lookup/foreign');
+  }
 }

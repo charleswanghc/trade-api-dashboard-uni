@@ -3,6 +3,8 @@ import os
 from datetime import datetime
 from typing import Literal, Optional, List
 
+import httpx
+
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
@@ -128,6 +130,58 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ==================== 商品查詢轟助函式 ====================
+
+def _parse_margin_html(html_text: str) -> list:
+    """Parse pfctrade margin HTML table into list of dicts."""
+    from html.parser import HTMLParser
+
+    class _TblParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.rows = []
+            self._row = None
+            self._cell = None
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "tr":
+                self._row = []
+            elif tag in ("td", "th") and self._row is not None:
+                self._cell = ""
+
+        def handle_endtag(self, tag):
+            if tag in ("td", "th") and self._cell is not None:
+                self._row.append(self._cell.strip())
+                self._cell = None
+            elif tag == "tr" and self._row is not None:
+                if any(c for c in self._row):
+                    self.rows.append(self._row)
+                self._row = None
+
+        def handle_data(self, data):
+            if self._cell is not None:
+                self._cell += data
+
+    parser = _TblParser()
+    parser.feed(html_text)
+    if len(parser.rows) < 2:
+        return []
+    HEADER_MAP = {
+        "交易所": "exchange",
+        "商品代號": "code",
+        "商品名稱": "name",
+        "原始保證金": "original_margin",
+        "維持保證金": "maintenance_margin",
+        "幣別": "currency",
+    }
+    headers = [HEADER_MAP.get(h, h) for h in parser.rows[0]]
+    return [
+        {headers[i]: row[i] for i in range(len(headers))}
+        for row in parser.rows[1:]
+        if len(row) >= len(headers)
+    ]
 
 
 # ==================== Health Check ====================
@@ -608,3 +662,47 @@ def get_signal(
     if not signal:
         raise HTTPException(status_code=404, detail="未找到訊號記錄")
     return signal.to_dict()
+
+
+# ==================== Product Lookup Proxy ====================
+
+@app.get("/product-lookup/tw")
+async def product_lookup_tw():
+    """代理查詢台灣期交所保證金表"""
+    url = "https://messagebus.pfctrade.com:9998/futuremarginquery"
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=10.0) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            try:
+                data = r.json()
+                if isinstance(data, list):
+                    return data
+            except Exception:
+                pass
+            return _parse_margin_html(r.text)
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="查詢逾時")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"查詢失敗: {str(e)}")
+
+
+@app.get("/product-lookup/foreign")
+async def product_lookup_foreign():
+    """代理查詢海外期貨保證金表"""
+    url = "https://messagebus.pfctrade.com:9998/foreignfuturemarginquery"
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=10.0) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            try:
+                data = r.json()
+                if isinstance(data, list):
+                    return data
+            except Exception:
+                pass
+            return _parse_margin_html(r.text)
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="查詢逾時")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"查詢失敗: {str(e)}")

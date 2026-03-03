@@ -96,3 +96,60 @@
     <ng-template #empty>尚無訂單。</ng-template>
   </div>
 </div>
+
+<div class="card lookup-card">
+  <div class="lookup-header" (click)="toggleLookup()">
+    <h2>商品代碼查詢庫</h2>
+    <span class="lookup-toggle">{{ showLookup ? '▲ 收起' : '▼ 展開' }}</span>
+  </div>
+
+  <div *ngIf="showLookup" class="lookup-body">
+    <div class="lookup-tabs">
+      <button type="button" class="btn" [class.secondary]="lookupTab !== 'tw'" (click)="setLookupTab('tw')">台灣期貨</button>
+      <button type="button" class="btn" [class.secondary]="lookupTab !== 'foreign'" (click)="setLookupTab('foreign')">海外期貨</button>
+      <button type="button" class="btn secondary" (click)="loadLookupData()" style="margin-left: auto;">重新載入</button>
+    </div>
+
+    <input
+      type="text"
+      class="lookup-filter"
+      #fi
+      [value]="lookupFilter"
+      (input)="onLookupFilter(fi.value)"
+      placeholder="搜尋商品代號 / 名稱 / 交易所..."
+    />
+
+    <div *ngIf="lookupLoading" class="lookup-status">載入中...</div>
+    <div *ngIf="lookupError" class="lookup-error">{{ lookupError }}</div>
+
+    <div *ngIf="!lookupLoading && !lookupError" class="lookup-table-wrap">
+      <table class="lookup-table" *ngIf="lookupFilteredData.length; else noData">
+        <thead>
+          <tr>
+            <th>交易所</th>
+            <th>商品代號</th>
+            <th>商品名稱</th>
+            <th>原始保證金</th>
+            <th>維持保證金</th>
+            <th>幣別</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of lookupFilteredData">
+            <td>{{ row.exchange }}</td>
+            <td><strong>{{ row.code }}</strong></td>
+            <td>{{ row.name }}</td>
+            <td>{{ row.original_margin }}</td>
+            <td>{{ row.maintenance_margin }}</td>
+            <td>{{ row.currency }}</td>
+            <td>
+              <button type="button" class="btn select-btn" (click)="selectFromLookup(row.code)">選用</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <ng-template #noData><p class="lookup-status">查無資料。</p></ng-template>
+    </div>
+  </div>
+</div>

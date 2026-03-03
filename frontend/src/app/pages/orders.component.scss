@@ -18,3 +18,89 @@
     color: var(--text);
   }
 }
+
+// ─── 商品代碼查詢庫 ───
+.lookup-card {
+  margin-top: 16px;
+
+  .lookup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+
+    h2 { margin: 0; }
+  }
+
+  .lookup-toggle {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .lookup-body {
+    margin-top: 12px;
+  }
+
+  .lookup-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .lookup-filter {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+  }
+
+  .lookup-status {
+    color: var(--muted);
+    padding: 8px 0;
+    font-size: 13px;
+  }
+
+  .lookup-error {
+    color: #f87171;
+    padding: 8px 0;
+    font-size: 13px;
+  }
+
+  .lookup-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: 420px;
+    overflow-y: auto;
+  }
+
+  .lookup-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+
+    th, td {
+      padding: 6px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    tbody tr:hover td {
+      background: rgba(148, 163, 184, 0.06);
+    }
+
+    .select-btn {
+      padding: 2px 10px;
+      font-size: 12px;
+    }
+  }
+}

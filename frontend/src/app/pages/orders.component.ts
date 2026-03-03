@@ -16,27 +16,38 @@ export class OrdersComponent implements OnInit {
   loading = false;
   productSuggestions: { code: string; label: string }[] = [];
 
+  // ─── 商品代碼查詢器 ───
+  showLookup = false;
+  lookupTab: 'tw' | 'foreign' = 'tw';
+  lookupFilter = '';
+  lookupData: any[] = [];
+  lookupFilteredData: any[] = [];
+  lookupLoading = false;
+  lookupError = '';
+
   private readonly TW_MONTH_CODES = 'ABCDEFGHIJKL';
-  // CME 月份代碼：F=1, G=2, H=3, J=4, K=5, M=6, N=7, Q=8, U=9, V=10, X=11, Z=12
-  private readonly CME_MONTH_CODES = ['F','G','H','J','K','M','N','Q','U','V','X','Z'];
+  // CME/CBT/CMX 月份代碼：F=1,G=2,H=3,J=4,K=5,M=6,N=7,Q=8,U=9,V=10,X=11,Z=12
+  private readonly US_MONTH_CODES = ['F','G','H','J','K','M','N','Q','U','V','X','Z'];
 
   private buildProductSuggestions(): void {
     const now = new Date();
 
-    // 台灣期交所商品
+    // 台灣期交所：年份個位數，每月合約
     const twProducts = [
-      { prefix: 'TXF', name: '台指期', allMonths: true },
-      { prefix: 'MXF', name: '小台指', allMonths: true },
-      { prefix: 'TMF', name: '微型台指', allMonths: true },
-      { prefix: 'EXF', name: '電子期', allMonths: true },
-      { prefix: 'FXF', name: '金融期', allMonths: true },
-      { prefix: 'XJF', name: '非金電期', allMonths: false },
-      { prefix: 'BRN', name: '布蘭特原油期', allMonths: true },
+      { prefix: 'TXF', name: '台指期' },
+      { prefix: 'MXF', name: '小台指' },
+      { prefix: 'TMF', name: '微型台指' },
+      { prefix: 'CDF', name: '台積電期貨' },
+      { prefix: 'QFF', name: '小型台積電期貨' },
     ];
 
-    // CME 海外期貨商品（季月：3/6/9/12）
-    const cmeProducts = [
-      { prefix: 'MNQ', name: '微型NQ那斯達克' },
+    // 美國交易所：僅季月（3/6/9/12），年份後兩位
+    const usProducts = [
+      { prefix: 'NQ',  name: '那斯達克',      exchange: 'CME' },
+      { prefix: 'MNQ', name: '微型那斯達克',  exchange: 'CME' },
+      { prefix: 'ZG',  name: '大黃金',        exchange: 'CBT' },
+      { prefix: 'YG',  name: '小黃金',        exchange: 'CBT' },
+      { prefix: '1OZ', name: '一盎司黃金',    exchange: 'CMX' },
     ];
 
     const suggestions: { code: string; label: string }[] = [];
@@ -47,20 +58,19 @@ export class OrdersComponent implements OnInit {
       const isQuarterly = [3, 6, 9, 12].includes(month);
       const label = `${d.getFullYear()}/${String(month).padStart(2, '0')}`;
 
-      // 台灣期交所：年份取個位數
+      // 台灣期交所
       const twYearCode = d.getFullYear() % 10;
       const twMonthCode = this.TW_MONTH_CODES[month - 1];
       for (const p of twProducts) {
-        if (!p.allMonths && !isQuarterly) continue;
         suggestions.push({ code: `${p.prefix}${twMonthCode}${twYearCode}`, label: `[台] ${p.name} ${label}` });
       }
 
-      // CME：僅季月，年份取後兩位
+      // 美國交易所（僅季月）
       if (isQuarterly) {
-        const cmeYearCode = String(d.getFullYear()).slice(-2);
-        const cmeMonthCode = this.CME_MONTH_CODES[month - 1];
-        for (const p of cmeProducts) {
-          suggestions.push({ code: `${p.prefix}${cmeMonthCode}${cmeYearCode}`, label: `[CME] ${p.name} ${label}` });
+        const usYearCode = String(d.getFullYear()).slice(-2);
+        const usMonthCode = this.US_MONTH_CODES[month - 1];
+        for (const p of usProducts) {
+          suggestions.push({ code: `${p.prefix}${usMonthCode}${usYearCode}`, label: `[${p.exchange}] ${p.name} ${label}` });
         }
       }
     }
@@ -111,5 +121,62 @@ export class OrdersComponent implements OnInit {
 
   loadOrders(): void {
     this.api.listOrders().subscribe((data) => (this.orders = data || []));
+  }
+
+  // ─── 商品代碼查詢器 ───
+  toggleLookup(): void {
+    this.showLookup = !this.showLookup;
+    if (this.showLookup && this.lookupData.length === 0) {
+      this.loadLookupData();
+    }
+  }
+
+  setLookupTab(tab: 'tw' | 'foreign'): void {
+    this.lookupTab = tab;
+    this.lookupData = [];
+    this.lookupFilteredData = [];
+    this.lookupFilter = '';
+    this.loadLookupData();
+  }
+
+  onLookupFilter(value: string): void {
+    this.lookupFilter = value;
+    this._applyLookupFilter();
+  }
+
+  private _applyLookupFilter(): void {
+    const f = this.lookupFilter.toLowerCase();
+    if (!f) {
+      this.lookupFilteredData = [...this.lookupData];
+      return;
+    }
+    this.lookupFilteredData = this.lookupData.filter(r =>
+      (r.code  || '').toLowerCase().includes(f) ||
+      (r.name  || '').toLowerCase().includes(f) ||
+      (r.exchange || '').toLowerCase().includes(f)
+    );
+  }
+
+  loadLookupData(): void {
+    this.lookupLoading = true;
+    this.lookupError = '';
+    const obs = this.lookupTab === 'tw'
+      ? this.api.getProductLookupTw()
+      : this.api.getProductLookupForeign();
+    obs.subscribe({
+      next: (data) => {
+        this.lookupData = data || [];
+        this._applyLookupFilter();
+        this.lookupLoading = false;
+      },
+      error: (err) => {
+        this.lookupError = `載入失敗：${err?.error?.detail || err.message}`;
+        this.lookupLoading = false;
+      }
+    });
+  }
+
+  selectFromLookup(code: string): void {
+    this.orderForm.patchValue({ productid: code });
   }
 }
