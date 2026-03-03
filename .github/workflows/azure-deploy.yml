@@ -25,6 +25,11 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Restore certificate from secret
+        run: |
+          mkdir -p certs
+          echo "${{ secrets.UNITRADE_CERT_PFX_BASE64 }}" | base64 -d > certs/unitrade_cert.pfx
+
       - name: Build and push Docker image via ACR
         run: |
           az acr build \
