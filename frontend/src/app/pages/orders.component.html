@@ -6,28 +6,33 @@
         <div>
           <label>帳號 (actno)</label>
           <input formControlName="actno" placeholder="1234567" />
+          <small class="field-hint">期貨交易帳號。已在伺服器設定 <code>UNITRADE_ACTNO</code> 環境變數者可<strong>留空</strong>，系統將自動帶入。</small>
         </div>
         <div>
           <label>子帳 (subactno)</label>
           <input formControlName="subactno" placeholder="" />
+          <small class="field-hint">子帳號，適用於法人或多帳戶情境。一般個人戶<strong>留空</strong>即可。</small>
         </div>
         <div>
           <label>商品代碼 (productid)</label>
-          <input formControlName="productid" placeholder="TXFF5" />
+          <input formControlName="productid" placeholder="輸入或選擇商品代碼" list="product-list" />
+          <datalist id="product-list">
+            <option *ngFor="let p of productSuggestions" [value]="p.code">{{ p.label }}</option>
+          </datalist>
         </div>
         <div>
           <label>買賣別 (bs)</label>
           <select formControlName="bs">
-            <option value="B">B</option>
-            <option value="S">S</option>
+            <option value="B">B - 買進 (Buy)</option>
+            <option value="S">S - 賣出 (Sell)</option>
           </select>
         </div>
         <div>
           <label>下單方式 (ordertype)</label>
           <select formControlName="ordertype">
-            <option value="L">L</option>
-            <option value="M">M</option>
-            <option value="P">P</option>
+            <option value="L">L - 限價 (Limit)｜須填委託價格</option>
+            <option value="M">M - 市價 (Market)｜無須填委託價格</option>
+            <option value="P">P - 範圍市價 (Primary)｜最優五檔，無須填委託價格</option>
           </select>
         </div>
         <div>
@@ -41,24 +46,24 @@
         <div>
           <label>委託種類 (ordercondition)</label>
           <select formControlName="ordercondition">
-            <option value="R">R</option>
-            <option value="I">I</option>
-            <option value="F">F</option>
+            <option value="R">R - 當日有效 (ROD)｜收盤前未成交自動取消</option>
+            <option value="I">I - 立即成交否則取消 (IOC)｜部分成交，餘量取消</option>
+            <option value="F">F - 全部成交否則取消 (FOK)｜無法全量即全撤</option>
           </select>
         </div>
         <div>
           <label>新平倉碼 (opencloseflag)</label>
           <select formControlName="opencloseflag">
-            <option value="">自動</option>
-            <option value="0">0</option>
-            <option value="1">1</option>
+            <option value="">自動 (Auto)</option>
+            <option value="0">0 - 開倉 (Open)</option>
+            <option value="1">1 - 平倉 (Close)</option>
           </select>
         </div>
         <div>
           <label>當沖碼 (dtrade)</label>
           <select formControlName="dtrade">
-            <option value="N">N</option>
-            <option value="Y">Y</option>
+            <option value="N">N - 非當沖</option>
+            <option value="Y">Y - 當沖</option>
           </select>
         </div>
         <div>
