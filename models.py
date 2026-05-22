@@ -127,6 +127,9 @@ class StrategyConfig(Base):
     # 狀態
     enabled = Column(Boolean, default=True)
     
+    # 自動換月：若為 True，target_product 視為商品基底代碼（如 MXF），自動補上近月月份代碼
+    auto_rollover = Column(Boolean, default=False)
+    
     # 備註
     description = Column(Text, nullable=True)
     
@@ -152,6 +155,7 @@ class StrategyConfig(Base):
             "account": self.account,
             "sub_account": self.sub_account,
             "enabled": self.enabled,
+            "auto_rollover": self.auto_rollover,
             "description": self.description,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

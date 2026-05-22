@@ -19,7 +19,8 @@
             name="strategy_name"
             [disabled]="isEditing"
             required
-            placeholder="例如：TXF_vivi_mini">
+            placeholder="必須與 Pine Script 中 strategyName 完全一致">
+          <small style="color:#f59e0b">&#x26a0; 此名稱必須與 TradingView Pine Script 的 <code>strategyName</code> 變數完全相同</small>
         </div>
         <div class="form-group">
           <label>說明</label>
@@ -40,8 +41,14 @@
             [(ngModel)]="currentStrategy.source_product"
             name="source_product"
             required
-            placeholder="TXFF5">
-          <small>TradingView 訊號中的商品代碼</small>
+            placeholder="TXF（對應大台指）">
+          <small>TradingView 訊號中的商品代碼（僅供記錄，不影響實際下單）</small>
+          <ng-container *ngIf="currentStrategy.source_product">
+            <small *ngIf="suggestMxfBase(currentStrategy.source_product || '') as mxfBase" style="color:#22d3ee">
+              對應微台指基底代碼：<strong>{{ mxfBase }}</strong>
+              &nbsp;→請在「實際下單商品」內填 <strong>{{ mxfBase }}</strong> 並開啟自動換月
+            </small>
+          </ng-container>
         </div>
         <div class="form-group">
           <label>實際下單商品 *</label>
@@ -50,8 +57,31 @@
             [(ngModel)]="currentStrategy.target_product"
             name="target_product"
             required
-            placeholder="MXFF5">
-          <small>實際要下單的商品代碼</small>
+            [placeholder]="currentStrategy.auto_rollover ? 'MXF (輸入基底代碼，自動補月份)' : 'MXFF6'">
+          <ng-container *ngIf="currentStrategy.auto_rollover && currentStrategy.target_product">
+            <small style="color:#4ade80">
+              ✔ 目前近月合約：<strong>{{ getCurrentContract(currentStrategy.target_product || '') }}</strong>
+              （到期後自動更新）
+            </small>
+          </ng-container>
+          <small *ngIf="currentStrategy.auto_rollover && !currentStrategy.target_product" style="color:#f59e0b">
+            &#x26a0; 自動換月已開啟：請只填商品基底代碼，不要加月份（如 MXF）
+          </small>
+          <small *ngIf="!currentStrategy.auto_rollover">實際要下單的商品代碼（包含月份）</small>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>自動換月</label>
+          <label class="toggle-label">
+            <input
+              type="checkbox"
+              [(ngModel)]="currentStrategy.auto_rollover"
+              name="auto_rollover">
+            <span>開啟自動換月（target_product 視為商品基底代碼，自動補近月套級）</span>
+          </label>
+          <small>TAIFEX 月份代碼：A=1月 B=2月 C=3月 D=4月 E=5月 F=6月 G=7月 H=8月 I=9月 J=10月 K=11月 L=12月，到期日=每月第三週三</small>
         </div>
       </div>
 
@@ -164,7 +194,14 @@
       <div class="strategy-info">
         <div class="info-row">
           <span class="label">商品映射：</span>
-          <span class="value">{{ strategy.source_product }} → {{ strategy.target_product }}</span>
+          <span class="value">
+            {{ strategy.source_product }} →
+            <ng-container *ngIf="strategy.auto_rollover; else staticProduct">
+              <strong style="color:#4ade80">{{ getCurrentContract(strategy.target_product) }}</strong>
+              <span style="color:#6b7280; font-size:11px"> (自動換月・基底: {{ strategy.target_product }})</span>
+            </ng-container>
+            <ng-template #staticProduct>{{ strategy.target_product }}</ng-template>
+          </span>
         </div>
         <div class="info-row">
           <span class="label">口數倍數：</span>

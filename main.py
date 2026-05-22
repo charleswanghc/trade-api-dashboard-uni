@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import Literal, Optional, List
 
 import httpx
@@ -104,6 +104,7 @@ class StrategyConfigRequest(BaseModel):
     account: Optional[str] = None
     sub_account: str = ""
     enabled: bool = True
+    auto_rollover: bool = False
     description: Optional[str] = None
 
 
@@ -133,6 +134,37 @@ app.add_middleware(
 
 
 # ==================== 商品查詢轟助函式 ====================
+def get_taifex_front_month_contract(base_code: str) -> str:
+    """計算台灣期交所近月合約代碼。
+
+    月份代碼：A=1月, B=2月, C=3月, D=4月, E=5月, F=6月,
+                G=7月, H=8月, I=9月, J=10月, K=11月, L=12月
+    到期日：每月第三個週三。
+    
+    範例：get_taifex_front_month_contract('MXF') -> 'MXFF6'  (若目前是2026年6月)
+    """
+    today = date.today()
+
+    def third_wednesday(year: int, month: int) -> date:
+        d = date(year, month, 1)
+        days_until_wed = (2 - d.weekday()) % 7  # 0=Mon, 2=Wed
+        first_wed = d + timedelta(days=days_until_wed)
+        return first_wed + timedelta(weeks=2)
+
+    expiry = third_wednesday(today.year, today.month)
+
+    if today > expiry:
+        if today.month == 12:
+            contract_year, contract_month = today.year + 1, 1
+        else:
+            contract_year, contract_month = today.year, today.month + 1
+    else:
+        contract_year, contract_month = today.year, today.month
+
+    # A=Jan(印碼65), B=Feb, ..., L=Dec(印碼76)
+    month_code = chr(ord('A') + contract_month - 1)
+    year_code = str(contract_year)[-1]
+    return f"{base_code}{month_code}{year_code}"
 
 def _parse_margin_html(html_text: str) -> list:
     """Parse pfctrade margin HTML table into list of dicts."""
@@ -398,7 +430,12 @@ def process_signal(
         )
 
     # 計算實際下單參數
-    actual_product = strategy_config.target_product
+    if strategy_config.auto_rollover:
+        # 自動換月：target_product 為商品基底代碼（如 MXF），自動補上近月月份代碼
+        actual_product = get_taifex_front_month_contract(strategy_config.target_product)
+        logger.info("Auto rollover: base=%s → contract=%s", strategy_config.target_product, actual_product)
+    else:
+        actual_product = strategy_config.target_product
     actual_quantity = signal.quantity * strategy_config.quantity_multiplier
 
     # 判斷買賣方向

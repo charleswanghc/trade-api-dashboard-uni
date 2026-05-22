@@ -53,6 +53,7 @@ export interface StrategyConfig {
   account?: string;
   sub_account: string;
   enabled: boolean;
+  auto_rollover: boolean;
   description?: string;
   created_at?: string;
   updated_at?: string;

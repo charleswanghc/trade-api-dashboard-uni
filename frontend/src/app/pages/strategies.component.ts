@@ -109,20 +109,21 @@ export class StrategiesComponent implements OnInit {
   getEmptyStrategy(): Partial<StrategyConfig> {
     return {
       strategy_name: '',
-      source_product: 'TXFF5',
-      target_product: 'TXFF5',
+      source_product: 'TXF',
+      target_product: 'MXF',
       quantity_multiplier: 1,
       max_position: 10,
       order_type: 'L',
       order_condition: 'R',
       dtrade: 'N',
-      entry_order_type: 'L',
-      entry_order_condition: 'R',
+      entry_order_type: 'M',
+      entry_order_condition: 'I',
       exit_order_type: 'M',
       exit_order_condition: 'I',
       account: '',
       sub_account: '',
       enabled: true,
+      auto_rollover: true,
       description: ''
     };
   }
@@ -139,5 +140,42 @@ export class StrategiesComponent implements OnInit {
 
   formatDate(date: string): string {
     return new Date(date).toLocaleString('zh-TW');
+  }
+
+  /**
+   * 計算 TAIFEX 近月合約代碼（與後端邏輯一致）。
+   * 月份代碼：A=1月 B=2月 ... F=6月 G=7月 ... L=12月
+   * 到期日：每月第三個週三
+   */
+  getCurrentContract(baseCode: string): string {
+    if (!baseCode || baseCode.length < 2) return '';
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1; // 1-12
+
+    // 找出本月第三個週三
+    const firstDay = new Date(year, month - 1, 1);
+    const dayOfWeek = firstDay.getDay(); // 0=Sun, 3=Wed
+    const daysUntilWed = (3 - dayOfWeek + 7) % 7;
+    const thirdWed = new Date(year, month - 1, 1 + daysUntilWed + 14);
+
+    let contractMonth = month;
+    let contractYear = year;
+    if (today > thirdWed) {
+      if (month === 12) { contractMonth = 1; contractYear = year + 1; }
+      else { contractMonth = month + 1; }
+    }
+
+    const monthCode = String.fromCharCode(65 + contractMonth - 1); // A=1, B=2...
+    const yearCode = contractYear.toString().slice(-1);
+    return `${baseCode}${monthCode}${yearCode}`;
+  }
+
+  /** 根據輸入的完整合約代碼（如 TXFF5），推測對應的微台基底代碼 MXF */
+  suggestMxfBase(input: string): string {
+    if (!input) return '';
+    const upper = input.toUpperCase();
+    if (upper.startsWith('TXF')) return 'MXF';
+    return upper.replace(/[A-L]\d$/, ''); // 去掉月份+年份後綴
   }
 }
