@@ -1,10 +1,13 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, date, timedelta
 from typing import Literal, Optional, List
 
 import httpx
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
@@ -111,18 +114,55 @@ class StrategyConfigRequest(BaseModel):
 
 # ==================== FastAPI App ====================
 
-app = FastAPI()
-
-cors_origins = os.getenv("CORS_ORIGINS", "*")
+_scheduler = AsyncIOScheduler(timezone="Asia/Taipei")
 
 
-@app.on_event("startup")
-async def startup_event():
-    """啟動時自動建立所有資料表（冪等操作，不影響既有資料）"""
+def _scheduled_sync_job(label: str) -> None:
+    """排程觸發的歷史同步作業（同步執行，在 scheduler 執行緒中呼叫）。"""
+    logger.info("[排程同步] 觸發點: %s", label)
+    result = trigger_history_sync()
+    logger.info("[排程同步] 結果: %s", result)
+
+
+@asynccontextmanager
+async def lifespan(app_instance):
+    # ── 啟動 ─────────────────────────────────────────────────────
     from models import Base
     from database import engine
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
+
+    # 台灣期貨換日時間表（Asia/Taipei）：
+    #   凌晨場結束：每日 05:00 → 排程 04:50 同步，確保夜盤資料不遺漏
+    #   日盤收盤後：每日 14:00 → 排程 13:55 同步，保存日盤完整紀錄
+    _scheduler.add_job(
+        _scheduled_sync_job,
+        CronTrigger(hour=4, minute=50, timezone="Asia/Taipei"),
+        args=["換日前(04:50)"],
+        id="sync_before_rollover",
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _scheduled_sync_job,
+        CronTrigger(hour=13, minute=55, timezone="Asia/Taipei"),
+        args=["日盤收盤後(13:55)"],
+        id="sync_after_day_close",
+        replace_existing=True,
+    )
+    _scheduler.start()
+    logger.info("APScheduler started — 自動同步排程：04:50 / 13:55 (Asia/Taipei)")
+
+    yield
+
+    # ── 關閉 ─────────────────────────────────────────────────────
+    _scheduler.shutdown(wait=False)
+    logger.info("APScheduler stopped")
+
+
+cors_origins = os.getenv("CORS_ORIGINS", "*")
+
+app = FastAPI(lifespan=lifespan)
+
 origins = [o.strip() for o in cors_origins.split(",") if o.strip()] or ["*"]
 
 app.add_middleware(
@@ -797,3 +837,19 @@ def list_order_replies(
 def history_sync():
     """手動觸發向交易所查詢當日歷史委託與成交，補回程式重啟後遺漏的紀錄。"""
     return trigger_history_sync()
+
+
+@app.get("/scheduler-status")
+def scheduler_status():
+    """查看自動同步排程狀態與下次執行時間。"""
+    jobs = []
+    for job in _scheduler.get_jobs():
+        next_run = job.next_run_time
+        jobs.append({
+            "id": job.id,
+            "next_run": next_run.isoformat() if next_run else None,
+        })
+    return {
+        "running": _scheduler.running,
+        "jobs": jobs,
+    }

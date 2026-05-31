@@ -3,3 +3,4 @@ pydantic
 sqlalchemy
 psycopg2-binary
 unitrade
+apscheduler
