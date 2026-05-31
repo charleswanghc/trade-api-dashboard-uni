@@ -1,7 +1,7 @@
 ﻿import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Subscription, timer, of } from 'rxjs';
+import { Subscription, timer, of, forkJoin } from 'rxjs';
 import { switchMap, catchError } from 'rxjs/operators';
 import { ApiService, Margin } from '../services/api.service';
 
@@ -28,48 +28,48 @@ export class DashboardComponent implements OnInit, OnDestroy {
   marginLoading = false;
 
   private healthPoll?: Subscription;
-  private unitradePoll?: Subscription;
+  /** 上一次偵測到的 unitrade 狀態，用來判斷是否剛連上 */
   private prevUnitradeStatus: string | null = null;
 
   constructor(private api: ApiService) {}
 
   ngOnInit(): void {
-    // 每 30 秒輕量 poll /health，後端無回應時標記離線
+    // 單一 30s timer 同時輪詢 /health + /health/unitrade
+    // 保證金只在 Unitrade 從非連線 → connected 的瞬間自動查詢一次，
+    // 其餘情況需手動按「重整」或重新進入頁面
     this.healthPoll = timer(0, HEALTH_POLL_MS)
       .pipe(
         switchMap(() =>
-          this.api.health().pipe(catchError(() => of(null)))
+          forkJoin({
+            health: this.api.health().pipe(catchError(() => of(null))),
+            unitrade: this.api.healthUnitrade().pipe(
+              catchError(() => of({ unitrade: 'disconnected' }))
+            ),
+          })
         )
       )
-      .subscribe(d => {
+      .subscribe(({ health, unitrade }) => {
+        // — health —
         this.lastChecked = new Date();
-        if (d === null) {
+        if (health === null) {
           this.healthError = true;
           this.health = null;
         } else {
           this.healthError = false;
-          this.health = d;
+          this.health = health;
         }
-      });
 
-    // 每 60 秒輪詢一次 Unitrade 連線狀態
-    this.unitradePoll = timer(0, 60_000)
-      .pipe(
-        switchMap(() =>
-          this.api.healthUnitrade().pipe(catchError(() => of({ unitrade: 'disconnected' })))
-        )
-      )
-      .subscribe(d => {
-        const status = (d as any)?.unitrade ?? 'disconnected';
-        // 從斷線 → connected 時自動重新載入保證金
-        if (status === 'connected' && this.prevUnitradeStatus !== 'connected') {
+        // — unitrade 狀態 —
+        const status = (unitrade as any)?.unitrade ?? 'disconnected';
+        // 只在「剛恢復連線」時自動補查一次保證金
+        if (status === 'connected' && this.prevUnitradeStatus !== null && this.prevUnitradeStatus !== 'connected') {
           this.loadMargin();
         }
         this.prevUnitradeStatus = status;
         this.unitradeStatus = status;
       });
 
-    // 載入保證金資訊
+    // 進入頁面時載入一次保證金
     this.loadMargin();
 
     // 只在進入頁面時載入一次
@@ -94,7 +94,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.healthPoll?.unsubscribe();
-    this.unitradePoll?.unsubscribe();
   }
 
   loadMargin(): void {
