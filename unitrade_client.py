@@ -59,7 +59,8 @@ def get_unitrade_client() -> Unitrade:
             # 登入後同步當日歷史委託/成交（補回程式重啟前的紀錄）
             actno = _get_env("UNITRADE_ACTNO", required=False)
             if actno:
-                _sync_history(api, actno)
+                stats = _sync_history(api, actno)
+                logger.info("Startup history sync stats: %s", stats)
 
             return api
         except Exception as exc:  # Unitrade SDK raises generic exceptions
@@ -225,52 +226,116 @@ def _setup_order_callbacks(api: Unitrade) -> None:
     logger.info("Unitrade callbacks registered (on_error / on_connected / on_disconnected / on_reply / on_match)")
 
 
-def _sync_history(api: Unitrade, actno: str) -> None:
-    """登入後向交易所查詢當日歷史委託與成交，補回程式重啟期間遺漏的紀錄。
+def _orderstatus_to_db_status(orderstatus: Optional[str]) -> str:
+    """將交易所回傳的 orderstatus 對應成 DB 使用的 status 字串。"""
+    if not orderstatus:
+        return "submitted"
+    s = orderstatus
+    if any(k in s for k in ("全部成交", "已成交", "成交")):
+        return "filled"
+    if "部分成交" in s:
+        return "partial_filled"
+    if any(k in s for k in ("刪除", "取消", "撤單")):
+        return "cancelled"
+    if any(k in s for k in ("失敗", "拒絕", "保證金", "不足", "錯誤")):
+        return "failed"
+    return "submitted"
 
-    對應 Unitrade 文件「委託查詢 query_reply」與「成交查詢 query_match」。
+
+def _sync_history(api: Unitrade, actno: str) -> dict:
+    """向交易所查詢當日歷史委託與成交，upsert 進資料庫。
+
+    - query_reply → 有舊記錄就更新，沒有就新建 OrderHistory（包含非本系統下的單）
+    - query_match → 以 network_id 去重，新成交記錄補建 TradeRecord
+    回傳同步統計 dict。
     """
     from database import SessionLocal
     from models import OrderHistory, TradeRecord
 
     logger.info("Starting history sync for actno=%s", actno)
     db = SessionLocal()
+    stats = {"reply_updated": 0, "reply_created": 0, "match_inserted": 0,
+             "reply_error": None, "match_error": None}
     try:
-        # ── 歷史委託回報 ──────────────────────────────────────────
+        # ── 歷史委託回報 (query_reply) ────────────────────────────
         reply_resp = api.dtrade.query_reply(actno, 500, "", "", "", "")
         if reply_resp and getattr(reply_resp, "ok", False):
             for reply in (reply_resp.data or []):
                 seq = (getattr(reply, "seq", None) or "").strip()
                 if not seq:
                     continue
+
+                orderstatus = getattr(reply, "orderstatus", None)
+                ordno = getattr(reply, "orderno", None)
+                filled_raw = getattr(reply, "matchqty", None)
+                try:
+                    filled = int(filled_raw) if filled_raw else None
+                except (ValueError, TypeError):
+                    filled = None
+
                 order = db.query(OrderHistory).filter(OrderHistory.order_id == seq).first()
                 if order:
-                    order.fill_status = getattr(reply, "orderstatus", None)
-                    ordno = getattr(reply, "orderno", None)
+                    # 更新已有記錄
+                    order.fill_status = orderstatus
                     if ordno:
                         order.ordno = ordno
-                    filled = getattr(reply, "matchqty", None)
                     if filled is not None:
-                        try:
-                            order.fill_quantity = int(filled)
-                        except (ValueError, TypeError):
-                            pass
+                        order.fill_quantity = filled
+                    order.status = _orderstatus_to_db_status(orderstatus)
                     order.updated_at = datetime.utcnow()
+                    stats["reply_updated"] += 1
+                else:
+                    # 新建記錄（非本系統下的單，例如透過其他工具下的）
+                    productid = getattr(reply, "productid", None) or "UNKNOWN"
+                    bs = getattr(reply, "bs", None) or "B"
+                    qty_raw = getattr(reply, "orderqty", None)
+                    try:
+                        qty = int(qty_raw) if qty_raw else 0
+                    except (ValueError, TypeError):
+                        qty = 0
+                    price_raw = getattr(reply, "orderprice", None)
+                    try:
+                        price = float(price_raw) if price_raw else None
+                    except (ValueError, TypeError):
+                        price = None
+
+                    new_order = OrderHistory(
+                        symbol=productid,
+                        action=bs,
+                        quantity=qty,
+                        price=price,
+                        account=getattr(reply, "investoracno", None) or actno,
+                        sub_account=getattr(reply, "subact", None) or "",
+                        order_id=seq,
+                        ordno=ordno,
+                        fill_status=orderstatus,
+                        fill_quantity=filled,
+                        status=_orderstatus_to_db_status(orderstatus),
+                        source="sync",
+                        updated_at=datetime.utcnow(),
+                        note=getattr(reply, "note", None),
+                    )
+                    db.add(new_order)
+                    stats["reply_created"] += 1
+
             db.commit()
-            logger.info("History sync: applied %d order replies", len(reply_resp.data or []))
+            logger.info(
+                "History sync reply: updated=%d created=%d",
+                stats["reply_updated"], stats["reply_created"],
+            )
         else:
             err = getattr(reply_resp, "error", "unknown") if reply_resp else "no response"
+            stats["reply_error"] = err
             logger.warning("query_reply failed: %s", err)
 
-        # ── 歷史成交回報 ──────────────────────────────────────────
+        # ── 歷史成交回報 (query_match) ────────────────────────────
         match_resp = api.dtrade.query_match(actno, 500, "", "", "", "")
         if match_resp and getattr(match_resp, "ok", False):
-            new_count = 0
             for match in (match_resp.data or []):
                 orderno = getattr(match, "orderno", None)
                 network_id = getattr(match, "networkid", None)
 
-                # 以 network_id 去重，避免重複插入
+                # 以 network_id 去重
                 if network_id:
                     exists = db.query(TradeRecord).filter(
                         TradeRecord.network_id == network_id
@@ -299,44 +364,61 @@ def _sync_history(api: Unitrade, actno: str) -> None:
                     mdate=getattr(match, "mdate", None),
                 )
 
-                # 嘗試關聯 OrderHistory
+                # 嘗試關聯 OrderHistory（先用 ordno，找不到再用 seq）
                 if orderno:
-                    order = db.query(OrderHistory).filter(OrderHistory.ordno == orderno).first()
-                    if order:
-                        trade.seq = order.order_id
-                        order.fill_price = match_price
-                        order.fill_quantity = match_qty
-                        order.status = "filled"
-                        order.updated_at = datetime.utcnow()
+                    linked = db.query(OrderHistory).filter(
+                        OrderHistory.ordno == orderno
+                    ).first()
+                    if linked:
+                        trade.seq = linked.order_id
+                        linked.fill_price = match_price
+                        linked.fill_quantity = match_qty
+                        linked.status = "filled"
+                        linked.updated_at = datetime.utcnow()
 
                 db.add(trade)
-                new_count += 1
+                stats["match_inserted"] += 1
 
             db.commit()
-            logger.info("History sync: inserted %d new trade records", new_count)
+            logger.info("History sync match: inserted=%d", stats["match_inserted"])
         else:
             err = getattr(match_resp, "error", "unknown") if match_resp else "no response"
+            stats["match_error"] = err
             logger.warning("query_match failed: %s", err)
 
     except Exception as exc:
         logger.error("History sync error: %s", exc)
         db.rollback()
+        stats["exception"] = str(exc)
     finally:
         db.close()
+
+    return stats
 
 
 def trigger_history_sync() -> dict:
     """手動觸發歷史同步，供 /history-sync 端點呼叫。"""
     global _client
     if _client is None:
-        return {"status": "error", "message": "Unitrade 尚未連線"}
+        return {"status": "error", "message": "Unitrade 尚未連線，請確認後端已成功登入"}
 
     actno = _get_env("UNITRADE_ACTNO", required=False)
     if not actno:
-        return {"status": "error", "message": "未設定 UNITRADE_ACTNO"}
+        return {"status": "error", "message": "未設定 UNITRADE_ACTNO 環境變數"}
 
     try:
-        _sync_history(_client, actno)
-        return {"status": "ok", "message": f"歷史同步完成 (actno={actno})"}
+        stats = _sync_history(_client, actno)
+        if "exception" in stats:
+            return {"status": "error", "message": stats["exception"]}
+        msg = (
+            f"同步完成：委託 {stats['reply_updated']} 筆更新 / "
+            f"{stats['reply_created']} 筆新建；"
+            f"成交 {stats['match_inserted']} 筆新建"
+        )
+        if stats.get("reply_error"):
+            msg += f"（委託查詢錯誤：{stats['reply_error']}）"
+        if stats.get("match_error"):
+            msg += f"（成交查詢錯誤：{stats['match_error']}）"
+        return {"status": "ok", "message": msg}
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
