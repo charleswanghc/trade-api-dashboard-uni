@@ -24,6 +24,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   unitradeStatus: string | null = null;
   margin: Margin | null = null;
   marginError = false;
+  marginErrorMsg = '';
 
   private healthPoll?: Subscription;
   private unitradePoll?: Subscription;
@@ -65,9 +66,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (data) => {
         this.margin = data && data.length > 0 ? data[0] : null;
         this.marginError = false;
+        this.marginErrorMsg = '';
       },
-      error: () => {
+      error: (err) => {
         this.marginError = true;
+        this.marginErrorMsg = err?.error?.detail ?? err?.message ?? '查詢失敗';
       },
     });
 

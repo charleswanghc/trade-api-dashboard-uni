@@ -881,7 +881,7 @@ def get_margin():
         raise HTTPException(status_code=503, detail=f"Unitrade 連線失敗: {exc}")
 
     actno = os.getenv("UNITRADE_ACTNO", "")
-    currency = os.getenv("UNITRADE_CURRENCY", "NTT")
+    currency = os.getenv("UNITRADE_CURRENCY", "TWD")
     if not actno:
         raise HTTPException(status_code=500, detail="未設定 UNITRADE_ACTNO 環境變數")
 
@@ -992,7 +992,7 @@ def get_unliquidations():
         raise HTTPException(status_code=503, detail=f"Unitrade 連線失敗: {exc}")
 
     actno = os.getenv("UNITRADE_ACTNO", "")
-    currency = os.getenv("UNITRADE_CURRENCY", "NTT")
+    currency = os.getenv("UNITRADE_CURRENCY", "")
     if not actno:
         raise HTTPException(status_code=500, detail="未設定 UNITRADE_ACTNO 環境變數")
 
