@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import OrderHistory, StrategyConfig, SignalHistory, SignalType
+from models import OrderHistory, StrategyConfig, SignalHistory, SignalType, TradeRecord
 
 from unitrade.trade.ddata import DOrderObject
 
@@ -314,7 +314,19 @@ def submit_unitrade_order(
         db.commit()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    order_id = extract_order_id(result) or getattr(result, "seq", None)
+    # DOrderResponse: issend=False 表示本地端即拒絕（如帳號格式錯誤）
+    issend = getattr(result, "issend", True)
+    if not issend:
+        err_msg = getattr(result, "errormsg", None) or getattr(result, "errorcode", "下單失敗")
+        order_record.status = "failed"
+        order_record.error_message = err_msg
+        order_record.order_result = serialize_order_result(result)
+        order_record.updated_at = datetime.utcnow()
+        db.commit()
+        raise HTTPException(status_code=400, detail=err_msg)
+
+    # seq 可能帶有尾端空白，需 strip
+    order_id = (getattr(result, "seq", None) or "").strip() or extract_order_id(result)
     order_record.order_id = order_id
     order_record.status = "submitted"
     order_record.order_result = serialize_order_result(result)
@@ -743,3 +755,38 @@ async def product_lookup_foreign():
         raise HTTPException(status_code=504, detail="查詢逾時")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"查詢失敗: {str(e)}")
+
+
+# ==================== 成交紀錄 API ====================
+
+@app.get("/trades")
+def list_trades(
+    db: Session = Depends(get_db),
+    limit: int = 100,
+    offset: int = 0,
+    product_id: Optional[str] = None,
+):
+    """列出成交回報（來自 dtrade.on_match 推播）"""
+    query = db.query(TradeRecord).order_by(TradeRecord.created_at.desc())
+    if product_id:
+        query = query.filter(TradeRecord.product_id == product_id)
+    trades = query.offset(offset).limit(min(limit, 1000)).all()
+    return [t.to_dict() for t in trades]
+
+
+@app.get("/order-replies")
+def list_order_replies(
+    db: Session = Depends(get_db),
+    limit: int = 100,
+    offset: int = 0,
+):
+    """列出有交易所回報狀態的委託（fill_status 已被 on_reply 更新）"""
+    orders = (
+        db.query(OrderHistory)
+        .filter(OrderHistory.fill_status.isnot(None))
+        .order_by(OrderHistory.updated_at.desc())
+        .offset(offset)
+        .limit(min(limit, 1000))
+        .all()
+    )
+    return [o.to_dict() for o in orders]

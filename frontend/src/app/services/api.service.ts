@@ -86,6 +86,25 @@ export interface SignalHistory {
   created_at: string;
 }
 
+export interface TradeRecord {
+  id: number;
+  seq?: string;
+  network_id?: string;
+  orderno?: string;
+  account?: string;
+  sub_account?: string;
+  product_kind?: string;
+  product_id?: string;
+  bs?: string;
+  match_price?: number;
+  match_qty?: number;
+  match_seq?: string;
+  match_time?: string;
+  note?: string;
+  mdate?: string;
+  created_at: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   constructor(private http: HttpClient) {}
@@ -148,6 +167,18 @@ export class ApiService {
   // ========== Send Signal ==========
   sendSignal(signal: SignalRequest) {
     return this.http.post<any>('/signal', signal);
+  }
+
+  // ========== Trade Records ==========
+  getTrades(limit = 100, offset = 0, productId?: string) {
+    let params: any = { limit: limit.toString(), offset: offset.toString() };
+    if (productId) params.product_id = productId;
+    return this.http.get<TradeRecord[]>('/trades', { params });
+  }
+
+  getOrderReplies(limit = 100, offset = 0) {
+    const params = { limit: limit.toString(), offset: offset.toString() };
+    return this.http.get<any[]>('/order-replies', { params });
   }
 
   // ========== Product Lookup ==========

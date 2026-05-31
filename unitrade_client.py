@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import threading
+from datetime import datetime
 from typing import Any, Optional
 
 from unitrade.unitrade import Unitrade
@@ -47,6 +48,7 @@ def get_unitrade_client() -> Unitrade:
         try:
             api = Unitrade()
             api.login(ws_url, account, password, cert_file, cert_password)
+            _setup_order_callbacks(api)
             _client = api
             logger.info("Unitrade login succeeded")
             return api
@@ -90,3 +92,100 @@ def extract_order_id(result: Any) -> Optional[str]:
             if value:
                 return str(value)
     return None
+
+
+def _setup_order_callbacks(api: Unitrade) -> None:
+    """Register on_reply and on_match callbacks to persist exchange reports to DB.
+
+    on_reply  → 委託回報（包含被交易所拒絕如保證金不足）→ 更新 OrderHistory
+    on_match  → 成交回報 → 建立 TradeRecord 並更新 OrderHistory
+    """
+    from database import SessionLocal
+    from models import OrderHistory, TradeRecord
+
+    def on_reply(reply) -> None:
+        """DOrderReply: orderstatus, statuscode, seq, orderno, matchqty ..."""
+        db = SessionLocal()
+        try:
+            seq = (getattr(reply, "seq", None) or "").strip()
+            if not seq:
+                return
+            order = db.query(OrderHistory).filter(OrderHistory.order_id == seq).first()
+            if order:
+                order.fill_status = getattr(reply, "orderstatus", None)
+                order.ordno = getattr(reply, "orderno", None)
+                filled = getattr(reply, "matchqty", None)
+                if filled is not None:
+                    try:
+                        order.fill_quantity = int(filled)
+                    except (ValueError, TypeError):
+                        pass
+                order.updated_at = datetime.utcnow()
+                db.commit()
+                logger.info(
+                    "on_reply: seq=%s orderstatus=%s",
+                    seq, getattr(reply, "orderstatus", ""),
+                )
+        except Exception as exc:
+            logger.error("on_reply callback error: %s", exc)
+            db.rollback()
+        finally:
+            db.close()
+
+    def on_match(match) -> None:
+        """DMatchReply: productid, bs, matchprice, matchqty, orderno ..."""
+        db = SessionLocal()
+        try:
+            orderno = getattr(match, "orderno", None)
+            match_price_raw = getattr(match, "matchprice", None)
+            match_qty_raw = getattr(match, "matchqty", None)
+
+            match_price = float(match_price_raw) if match_price_raw else None
+            match_qty = int(match_qty_raw) if match_qty_raw else None
+
+            # 建立成交記錄
+            trade = TradeRecord(
+                network_id=getattr(match, "networkid", None),
+                orderno=orderno,
+                account=getattr(match, "investoracno", None),
+                sub_account=getattr(match, "subact", None),
+                product_kind=getattr(match, "productkind", None),
+                product_id=getattr(match, "productid", None),
+                bs=getattr(match, "bs", None),
+                match_price=match_price,
+                match_qty=match_qty,
+                match_seq=getattr(match, "matchseq", None),
+                match_time=getattr(match, "matchtime", None),
+                note=getattr(match, "note", None),
+                mdate=getattr(match, "mdate", None),
+            )
+
+            # 嘗試關聯 OrderHistory
+            if orderno:
+                order = db.query(OrderHistory).filter(OrderHistory.ordno == orderno).first()
+                if order:
+                    trade.seq = order.order_id
+                    order.fill_price = match_price
+                    order.fill_quantity = match_qty
+                    order.status = "filled"
+                    order.updated_at = datetime.utcnow()
+
+            db.add(trade)
+            db.commit()
+            logger.info(
+                "on_match: orderno=%s product=%s bs=%s price=%s qty=%s",
+                orderno,
+                getattr(match, "productid", ""),
+                getattr(match, "bs", ""),
+                match_price,
+                match_qty,
+            )
+        except Exception as exc:
+            logger.error("on_match callback error: %s", exc)
+            db.rollback()
+        finally:
+            db.close()
+
+    api.dtrade.on_reply = on_reply
+    api.dtrade.on_match = on_match
+    logger.info("Unitrade order callbacks (on_reply / on_match) registered")

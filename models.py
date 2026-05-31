@@ -209,3 +209,54 @@ class SignalHistory(Base):
             "raw_payload": self.raw_payload,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class TradeRecord(Base):
+    """成交回報記錄 - 來自 dtrade.on_match 的即時成交推播"""
+    __tablename__ = "trade_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # 關聯欄位
+    seq = Column(String, nullable=True, index=True)         # 對應 OrderHistory.order_id（下單序號）
+    network_id = Column(String, nullable=True, index=True)  # 網路流水序號
+    orderno = Column(String, nullable=True, index=True)     # 委託書號
+
+    # 帳號
+    account = Column(String, nullable=True)
+    sub_account = Column(String, nullable=True)
+
+    # 商品
+    product_kind = Column(String, nullable=True)  # 1:期貨 2:選擇權 ...
+    product_id = Column(String, nullable=True, index=True)
+    bs = Column(String, nullable=True)  # B/S
+
+    # 成交資訊
+    match_price = Column(Float, nullable=True)
+    match_qty = Column(Integer, nullable=True)
+    match_seq = Column(String, nullable=True)
+    match_time = Column(String, nullable=True)
+    note = Column(String, nullable=True)
+    mdate = Column(String, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "seq": self.seq,
+            "network_id": self.network_id,
+            "orderno": self.orderno,
+            "account": self.account,
+            "sub_account": self.sub_account,
+            "product_kind": self.product_kind,
+            "product_id": self.product_id,
+            "bs": self.bs,
+            "match_price": self.match_price,
+            "match_qty": self.match_qty,
+            "match_seq": self.match_seq,
+            "match_time": self.match_time,
+            "note": self.note,
+            "mdate": self.mdate,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

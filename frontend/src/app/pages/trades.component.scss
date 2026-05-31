@@ -1,1 +1,11 @@
 // Trades-specific styles — global layout tokens are in styles.css
+
+.badge-buy {
+  background: rgba(38, 166, 154, 0.18);
+  color: #26a69a;
+}
+
+.badge-sell {
+  background: rgba(239, 83, 80, 0.18);
+  color: #ef5350;
+}

@@ -1,10 +1,88 @@
 <div class="card">
   <div class="card-header">
     <div class="card-title">成交紀錄</div>
+    <button class="btn secondary" (click)="load()">↺ 重新整理</button>
   </div>
-  <div class="empty-state" style="padding: 52px 20px">
-    <div style="font-size: 52px; margin-bottom: 14px; opacity: 0.15">↺</div>
-    <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px">後端尚未提供成交查詢端點</div>
-    <div style="font-size: 12px">當成交記錄 API 開放後，此頁面將顯示歷史成交與委託明細</div>
+
+  <div *ngIf="loading" class="empty-state" style="padding: 40px 20px">
+    <div style="font-size: 13px; opacity: 0.5">載入中…</div>
   </div>
+
+  <div *ngIf="!loading && trades.length === 0 && !error" class="empty-state" style="padding: 52px 20px">
+    <div style="font-size: 52px; margin-bottom: 14px; opacity: 0.15">✓</div>
+    <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px">尚無成交紀錄</div>
+    <div style="font-size: 12px">當有成交回報時，此頁面將自動顯示</div>
+  </div>
+
+  <div *ngIf="error" class="empty-state" style="padding: 40px 20px; color: #ef5350">
+    {{ error }}
+  </div>
+
+  <table *ngIf="!loading && trades.length > 0" class="data-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>成交時間</th>
+        <th>商品</th>
+        <th>買賣</th>
+        <th>成交價</th>
+        <th>口數</th>
+        <th>委託書號</th>
+        <th>帳號</th>
+        <th>備註</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let t of trades">
+        <td>#{{ t.id }}</td>
+        <td>{{ t.mdate || t.match_time || (t.created_at | date:'yyyy/MM/dd HH:mm:ss') }}</td>
+        <td>{{ t.product_id || '–' }}</td>
+        <td>
+          <span class="badge" [ngClass]="bsClass(t.bs)">{{ bsLabel(t.bs) }}</span>
+        </td>
+        <td>{{ t.match_price != null ? (t.match_price | number:'1.0-4') : '–' }}</td>
+        <td>{{ t.match_qty ?? '–' }}</td>
+        <td>{{ t.orderno || '–' }}</td>
+        <td>{{ t.account || '–' }}</td>
+        <td>{{ t.note || '–' }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 委託回報（含交易所拒絕訊息） -->
+<div class="card" style="margin-top: 16px" *ngIf="orderReplies.length > 0">
+  <div class="card-header">
+    <div class="card-title">委託回報狀態</div>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>委託序號</th>
+        <th>委託書號</th>
+        <th>商品</th>
+        <th>買賣</th>
+        <th>委託狀態</th>
+        <th>已成交</th>
+        <th>更新時間</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let o of orderReplies">
+        <td>{{ o.order_id || '–' }}</td>
+        <td>{{ o.ordno || '–' }}</td>
+        <td>{{ o.symbol }}</td>
+        <td>
+          <span class="badge" [ngClass]="o.action === 'B' ? 'badge-buy' : 'badge-sell'">
+            {{ o.action === 'B' ? '買進' : '賣出' }}
+          </span>
+        </td>
+        <td [style.color]="isRejected(o.fill_status) ? '#ef5350' : 'inherit'">
+          {{ o.fill_status || '–' }}
+        </td>
+        <td>{{ o.fill_quantity ?? '–' }}</td>
+        <td>{{ o.updated_at ? (o.updated_at | date:'MM/dd HH:mm:ss') : '–' }}</td>
+      </tr>
+    </tbody>
+  </table>
 </div>
