@@ -1,0 +1,95 @@
+name: Trading Hours Schedule
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 台灣期貨 + 美股交易時間排程控制
+#
+# 每週僅在完整休市期間（週六 05:30 CST ~ 週一 07:30 CST）關閉 Container App，
+# 節省約 50 小時/週的主機費用。
+#
+# 換算成 UTC（CST = UTC+8）：
+#   關閉: 週五 21:30 UTC  →  週六 05:30 CST
+#   開啟: 週日 23:30 UTC  →  週一 07:30 CST
+#
+# 手動觸發（國定假日 / 臨時停機）：
+#   GitHub → Actions → Trading Hours Schedule → Run workflow → 選 start/stop
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    # 關閉: 週五 21:30 UTC = 週六 05:30 CST（台期夜盤結束後）
+    - cron: '30 21 * * 5'
+    # 開啟: 週日 23:30 UTC = 週一 07:30 CST（週一日盤前 1 小時）
+    - cron: '30 23 * * 0'
+
+  workflow_dispatch:
+    inputs:
+      action:
+        description: '手動控制容器狀態'
+        required: true
+        type: choice
+        options:
+          - start
+          - stop
+
+env:
+  CONTAINER_APP_NAME: trade-api-backend
+  AZURE_RESOURCE_GROUP: trade-api-rg
+
+jobs:
+  control-container-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure 登入
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # ── 判斷執行動作 ──────────────────────────────────────────────────────
+      - name: 判斷啟動或停止
+        id: action
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "action=${{ inputs.action }}" >> "$GITHUB_OUTPUT"
+            echo "reason=手動觸發" >> "$GITHUB_OUTPUT"
+          elif [ "$(date -u +%u)" = "5" ]; then
+            # GitHub cron 在 UTC 週五觸發 → 停止
+            echo "action=stop" >> "$GITHUB_OUTPUT"
+            echo "reason=週末休市排程（週六 05:30 CST）" >> "$GITHUB_OUTPUT"
+          else
+            # UTC 週日觸發 → 啟動
+            echo "action=start" >> "$GITHUB_OUTPUT"
+            echo "reason=週一開市排程（週一 07:30 CST）" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── 開啟（min=1, max=10）────────────────────────────────────────────
+      - name: 開啟 Container App
+        if: steps.action.outputs.action == 'start'
+        run: |
+          echo "▶️  開啟 Container App — ${{ steps.action.outputs.reason }}"
+          az containerapp update \
+            --name "${{ env.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --min-replicas 1 \
+            --max-replicas 10
+          echo "✅ Container App 已開啟 (min-replicas=1)"
+
+      # ── 關閉（min=0, max=0 → 強制縮至 0 個副本）──────────────────────
+      - name: 關閉 Container App
+        if: steps.action.outputs.action == 'stop'
+        run: |
+          echo "⏹️  關閉 Container App — ${{ steps.action.outputs.reason }}"
+          az containerapp update \
+            --name "${{ env.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --min-replicas 0 \
+            --max-replicas 0
+          echo "🛑 Container App 已關閉 (min-replicas=0, max-replicas=0)"
+
+      # ── 回報目前狀態 ──────────────────────────────────────────────────────
+      - name: 查詢目前副本狀態
+        run: |
+          az containerapp show \
+            --name "${{ env.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.template.scale.{minReplicas:minReplicas, maxReplicas:maxReplicas}" \
+            --output table
