@@ -20,6 +20,7 @@ from unitrade_client import (
     extract_order_id,
     get_unitrade_client,
     serialize_order_result,
+    trigger_history_sync,
 )
 
 logger = logging.getLogger(__name__)
@@ -790,3 +791,9 @@ def list_order_replies(
         .all()
     )
     return [o.to_dict() for o in orders]
+
+
+@app.post("/history-sync")
+def history_sync():
+    """手動觸發向交易所查詢當日歷史委託與成交，補回程式重啟後遺漏的紀錄。"""
+    return trigger_history_sync()

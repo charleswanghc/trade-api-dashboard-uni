@@ -13,6 +13,8 @@ export class TradesComponent implements OnInit {
   trades: TradeRecord[] = [];
   orderReplies: any[] = [];
   loading = false;
+  syncing = false;
+  syncMessage = '';
   error = '';
 
   constructor(private api: ApiService) {}
@@ -58,5 +60,21 @@ export class TradesComponent implements OnInit {
     if (!status) return false;
     // 狀態碼 9xxx 通常代表交易所拒絕
     return /TTO|拒絕|保證金|不足|錯誤|失敗/.test(status);
+  }
+
+  syncHistory(): void {
+    this.syncing = true;
+    this.syncMessage = '';
+    this.api.triggerHistorySync().subscribe({
+      next: (res) => {
+        this.syncMessage = res.message;
+        this.syncing = false;
+        this.load(); // 後重新載入資料
+      },
+      error: (err) => {
+        this.syncMessage = err?.error?.detail || '同步失敗';
+        this.syncing = false;
+      },
+    });
   }
 }

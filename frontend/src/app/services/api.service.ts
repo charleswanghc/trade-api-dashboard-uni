@@ -181,6 +181,10 @@ export class ApiService {
     return this.http.get<any[]>('/order-replies', { params });
   }
 
+  triggerHistorySync() {
+    return this.http.post<{ status: string; message: string }>('/history-sync', {});
+  }
+
   // ========== Product Lookup ==========
   getProductLookupTw() {
     return this.http.get<any[]>('/product-lookup/tw');
