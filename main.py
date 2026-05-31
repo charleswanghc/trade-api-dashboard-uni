@@ -853,3 +853,107 @@ def scheduler_status():
         "running": _scheduler.running,
         "jobs": jobs,
     }
+
+
+# ==================== 帳務 / 部位 ====================
+
+def _getattr2(obj, *names):
+    """從物件取欄位，同時嘗試大寫與小寫名稱（相容 Unitrade SDK 不同版本）。"""
+    for n in names:
+        v = getattr(obj, n, None)
+        if v is not None:
+            return v
+        v = getattr(obj, n.lower(), None)
+        if v is not None:
+            return v
+    return None
+
+
+@app.get("/positions")
+def get_positions():
+    """即時部位查詢 — daccount.get_position()
+
+    回傳每個商品的留倉口數、平均成本、浮動損益等即時資訊。
+    """
+    try:
+        api = get_unitrade_client()
+    except UnitradeLoginError as exc:
+        raise HTTPException(status_code=503, detail=f"Unitrade 連線失敗: {exc}")
+
+    actno = os.getenv("UNITRADE_ACTNO", "")
+    currency = os.getenv("UNITRADE_CURRENCY", "NTT")
+    if not actno:
+        raise HTTPException(status_code=500, detail="未設定 UNITRADE_ACTNO 環境變數")
+
+    resp = api.daccount.get_position(actno, currency)
+    if resp is None or not getattr(resp, "ok", False):
+        err = getattr(resp, "error", "unknown") if resp else "no response"
+        raise HTTPException(status_code=502, detail=f"即時部位查詢失敗: {err}")
+
+    result = []
+    for p in (resp.data or []):
+        result.append({
+            "product":          _getattr2(p, "PRODUCT"),
+            "product_id":       _getattr2(p, "PRODUCTID"),
+            "product_name":     _getattr2(p, "PRODUCT_NAME"),
+            "product_kind":     _getattr2(p, "PRODUCTKIND"),
+            "month":            _getattr2(p, "MONTH"),
+            "call_put":         _getattr2(p, "CALL_PUT"),
+            "strike_price":     _getattr2(p, "STRIKE_PRICE"),
+            # 留倉口數
+            "buy_open_qty":     _getattr2(p, "CURRENT_BUY_OPEN_POSITION"),
+            "sell_open_qty":    _getattr2(p, "CURRENT_SELL_OPEN_POSITION"),
+            # 前日留倉
+            "ot_qty_b":         _getattr2(p, "OT_QTY_B"),
+            "ot_qty_s":         _getattr2(p, "OT_QTY_S"),
+            # 今日成交
+            "today_match_b":    _getattr2(p, "NOWMATCH_QTY_B"),
+            "today_match_s":    _getattr2(p, "NOWMATCH_QTY_S"),
+            "today_close":      _getattr2(p, "TODAY_CLOSE_POSITION"),
+            # 成本 / 損益
+            "buy_avg_cost":     _getattr2(p, "OPEN_BUY_POSITION_AVERAGE_COST"),
+            "sell_avg_cost":    _getattr2(p, "OPEN_SELL_POSITION_AVERAGE_COST"),
+            "ref_price":        _getattr2(p, "REFERENCE_REALPRICE"),
+            "floating_pnl":     _getattr2(p, "FLOATING_PNL"),
+            "close_pnl":        _getattr2(p, "CLOSE_POSITION_PNL"),
+        })
+    return result
+
+
+@app.get("/unliquidations")
+def get_unliquidations():
+    """未平倉查詢 — daccount.get_unliquidation()
+
+    回傳留倉口數、成交均價、即時價、浮動損益、淨損益。
+    """
+    try:
+        api = get_unitrade_client()
+    except UnitradeLoginError as exc:
+        raise HTTPException(status_code=503, detail=f"Unitrade 連線失敗: {exc}")
+
+    actno = os.getenv("UNITRADE_ACTNO", "")
+    currency = os.getenv("UNITRADE_CURRENCY", "NTT")
+    if not actno:
+        raise HTTPException(status_code=500, detail="未設定 UNITRADE_ACTNO 環境變數")
+
+    resp = api.daccount.get_unliquidation(actno, currency)
+    if resp is None or not getattr(resp, "ok", False):
+        err = getattr(resp, "error", "unknown") if resp else "no response"
+        raise HTTPException(status_code=502, detail=f"未平倉查詢失敗: {err}")
+
+    result = []
+    for u in (resp.data or []):
+        result.append({
+            "product_id":       _getattr2(u, "PRODUCTID"),
+            "product_name":     _getattr2(u, "PRODUCT_NAME"),
+            "bs":               _getattr2(u, "BS"),
+            "total_qty":        _getattr2(u, "TOTALOTQTY"),
+            "avg_match_price":  _getattr2(u, "AVGMATCHPRICE"),
+            "real_price":       _getattr2(u, "REALPRICE"),
+            "floating_pnl":     _getattr2(u, "REFTOTALPL"),
+            "net_pnl":          _getattr2(u, "NET_PROFIT_LOSS"),
+            "tax":              _getattr2(u, "CTAXAMT"),
+            "commission":       _getattr2(u, "COMMISSION_FEE"),
+            "multiname":        _getattr2(u, "MULTINAME"),
+        })
+    return result

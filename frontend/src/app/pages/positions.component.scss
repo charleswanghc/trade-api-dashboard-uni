@@ -1,1 +1,25 @@
 // Positions-specific styles — global layout tokens are in styles.css
+
+.pnl-positive {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.pnl-negative {
+  color: #ef5350;
+  font-weight: 600;
+}
+
+.badge-buy {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.badge-sell {
+  color: #ef5350;
+  font-weight: 600;
+}
+
+.row-no-position {
+  opacity: 0.45;
+}

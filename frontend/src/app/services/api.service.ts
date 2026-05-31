@@ -185,6 +185,15 @@ export class ApiService {
     return this.http.post<{ status: string; message: string }>('/history-sync', {});
   }
 
+  // ========== Positions ==========
+  getPositions() {
+    return this.http.get<Position[]>('/positions');
+  }
+
+  getUnliquidations() {
+    return this.http.get<Unliquidation[]>('/unliquidations');
+  }
+
   // ========== Product Lookup ==========
   getProductLookupTw() {
     return this.http.get<any[]>('/product-lookup/tw');
@@ -193,4 +202,40 @@ export class ApiService {
   getProductLookupForeign() {
     return this.http.get<any[]>('/product-lookup/foreign');
   }
+}
+
+export interface Position {
+  product?: string;
+  product_id?: string;
+  product_name?: string;
+  product_kind?: string;
+  month?: string;
+  call_put?: string;
+  strike_price?: number;
+  buy_open_qty?: number;
+  sell_open_qty?: number;
+  ot_qty_b?: number;
+  ot_qty_s?: number;
+  today_match_b?: number;
+  today_match_s?: number;
+  today_close?: number;
+  buy_avg_cost?: number;
+  sell_avg_cost?: number;
+  ref_price?: number;
+  floating_pnl?: number;
+  close_pnl?: number;
+}
+
+export interface Unliquidation {
+  product_id?: string;
+  product_name?: string;
+  bs?: string;
+  total_qty?: number;
+  avg_match_price?: number;
+  real_price?: number;
+  floating_pnl?: number;
+  net_pnl?: number;
+  tax?: number;
+  commission?: number;
+  multiname?: string;
 }

@@ -1,10 +1,119 @@
 <div class="card">
   <div class="card-header">
     <div class="card-title">未平倉部位</div>
+    <button class="btn secondary" (click)="load()" [disabled]="loading">↺ 重新整理</button>
   </div>
-  <div class="empty-state" style="padding: 52px 20px">
-    <div style="font-size: 52px; margin-bottom: 14px; opacity: 0.15">◉</div>
-    <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px">後端尚未提供部位查詢端點</div>
-    <div style="font-size: 12px">當 /positions API 開放後，此頁面將顯示即時未平倉部位資料</div>
+
+  <div *ngIf="loading" class="empty-state" style="padding: 40px 20px">
+    <div style="font-size: 13px; opacity: 0.5">載入中…</div>
   </div>
+
+  <div *ngIf="error" class="empty-state" style="padding: 40px 20px; color: #ef5350">
+    {{ error }}
+  </div>
+
+  <ng-container *ngIf="!loading && !error">
+
+    <!-- 即時部位（含今日成交資訊）-->
+    <div *ngIf="positions.length > 0" style="margin-bottom: 24px">
+      <div style="font-size: 12px; font-weight: 600; opacity: 0.5; padding: 0 20px 8px">即時部位</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>商品</th>
+            <th>月份</th>
+            <th>買進留倉</th>
+            <th>賣出留倉</th>
+            <th>買均成本</th>
+            <th>賣均成本</th>
+            <th>參考即時價</th>
+            <th>浮動損益</th>
+            <th>平倉損益</th>
+            <th>今日成交買</th>
+            <th>今日成交賣</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let p of positions"
+              [class.row-no-position]="netQty(p) === 0">
+            <td>
+              <strong>{{ p.product_id }}</strong>
+              <span *ngIf="p.product_name" style="font-size:11px;opacity:0.6;margin-left:4px">
+                {{ p.product_name }}
+              </span>
+            </td>
+            <td>{{ p.month ?? '–' }}</td>
+            <td>{{ p.buy_open_qty ?? 0 }}</td>
+            <td>{{ p.sell_open_qty ?? 0 }}</td>
+            <td>{{ p.buy_avg_cost != null ? (p.buy_avg_cost | number:'1.0-2') : '–' }}</td>
+            <td>{{ p.sell_avg_cost != null ? (p.sell_avg_cost | number:'1.0-2') : '–' }}</td>
+            <td>{{ p.ref_price != null ? (p.ref_price | number:'1.0-2') : '–' }}</td>
+            <td [class]="pnlClass(p.floating_pnl)">
+              {{ p.floating_pnl != null ? (p.floating_pnl | number:'1.0-0') : '–' }}
+            </td>
+            <td [class]="pnlClass(p.close_pnl)">
+              {{ p.close_pnl != null ? (p.close_pnl | number:'1.0-0') : '–' }}
+            </td>
+            <td>{{ p.today_match_b ?? 0 }}</td>
+            <td>{{ p.today_match_s ?? 0 }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 未平倉彙總 -->
+    <div *ngIf="unliquidations.length > 0">
+      <div style="font-size: 12px; font-weight: 600; opacity: 0.5; padding: 0 20px 8px">未平倉彙總</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>商品</th>
+            <th>買賣</th>
+            <th>留倉口數</th>
+            <th>成交均價</th>
+            <th>即時價</th>
+            <th>浮動損益</th>
+            <th>淨損益</th>
+            <th>手續費</th>
+            <th>交易稅</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let u of unliquidations">
+            <td>
+              <strong>{{ u.product_id }}</strong>
+              <span *ngIf="u.product_name" style="font-size:11px;opacity:0.6;margin-left:4px">
+                {{ u.product_name }}
+              </span>
+            </td>
+            <td>
+              <span [class]="u.bs === 'B' ? 'badge-buy' : 'badge-sell'">
+                {{ bsLabel(u.bs) }}
+              </span>
+            </td>
+            <td>{{ u.total_qty ?? '–' }}</td>
+            <td>{{ u.avg_match_price != null ? (u.avg_match_price | number:'1.0-2') : '–' }}</td>
+            <td>{{ u.real_price != null ? (u.real_price | number:'1.0-2') : '–' }}</td>
+            <td [class]="pnlClass(u.floating_pnl)">
+              {{ u.floating_pnl != null ? (u.floating_pnl | number:'1.0-0') : '–' }}
+            </td>
+            <td [class]="pnlClass(u.net_pnl)">
+              {{ u.net_pnl != null ? (u.net_pnl | number:'1.0-0') : '–' }}
+            </td>
+            <td>{{ u.commission != null ? (u.commission | number:'1.0-0') : '–' }}</td>
+            <td>{{ u.tax != null ? (u.tax | number:'1.0-0') : '–' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 無部位 -->
+    <div *ngIf="positions.length === 0 && unliquidations.length === 0"
+         class="empty-state" style="padding: 52px 20px">
+      <div style="font-size: 52px; margin-bottom: 14px; opacity: 0.15">◉</div>
+      <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px">目前無未平倉部位</div>
+      <div style="font-size: 12px">有留倉部位時，此頁面將自動顯示</div>
+    </div>
+
+  </ng-container>
 </div>
