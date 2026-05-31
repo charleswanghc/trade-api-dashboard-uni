@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Subscription, timer, of } from 'rxjs';
 import { switchMap, catchError } from 'rxjs/operators';
-import { ApiService } from '../services/api.service';
+import { ApiService, Margin } from '../services/api.service';
 
 const HEALTH_POLL_MS = 30_000;
 
@@ -22,6 +22,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   todaySignals: number | null = null;
   recentSignals: any[] = [];
   unitradeStatus: string | null = null;
+  margin: Margin | null = null;
+  marginError = false;
 
   private healthPoll?: Subscription;
   private unitradePoll?: Subscription;
@@ -58,6 +60,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.unitradeStatus = (d as any)?.unitrade ?? 'disconnected';
       });
 
+    // 載入保證金資訊
+    this.api.getMargin().subscribe({
+      next: (data) => {
+        this.margin = data && data.length > 0 ? data[0] : null;
+        this.marginError = false;
+      },
+      error: () => {
+        this.marginError = true;
+      },
+    });
+
     // 只在進入頁面時載入一次
     this.api.getStrategies(true).subscribe({
       next: d => (this.strategyCount = d.length),
@@ -81,6 +94,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.healthPoll?.unsubscribe();
     this.unitradePoll?.unsubscribe();
+  }
+
+  pnlClass(v: number | undefined): string {
+    if (v == null) return '';
+    return v > 0 ? 'text-success' : v < 0 ? 'text-danger' : '';
   }
 
   getSignalClass(type: string): string {

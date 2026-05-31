@@ -869,6 +869,66 @@ def _getattr2(obj, *names):
     return None
 
 
+@app.get("/margin")
+def get_margin():
+    """保證金查詢 — daccount.get_margin()
+
+    回傳權益數、原始/維持保證金、可動用保證金、風險指標、損益等帳戶財務資訊。
+    """
+    try:
+        api = get_unitrade_client()
+    except UnitradeLoginError as exc:
+        raise HTTPException(status_code=503, detail=f"Unitrade 連線失敗: {exc}")
+
+    actno = os.getenv("UNITRADE_ACTNO", "")
+    currency = os.getenv("UNITRADE_CURRENCY", "NTT")
+    if not actno:
+        raise HTTPException(status_code=500, detail="未設定 UNITRADE_ACTNO 環境變數")
+
+    resp = api.daccount.get_margin(actno, currency)
+    if resp is None or not getattr(resp, "ok", False):
+        err = getattr(resp, "error", "unknown") if resp else "no response"
+        raise HTTPException(status_code=502, detail=f"保證金查詢失敗: {err}")
+
+    result = []
+    for m in (resp.data or []):
+        result.append({
+            "actno":            _getattr2(m, "ACTNO"),
+            "account_date":     _getattr2(m, "ACCOUNT_DATE"),
+            "currency":         _getattr2(m, "CURRENCY"),
+            # 餘額 / 權益
+            "equity":           _getattr2(m, "CTDAB"),           # 權益數
+            "yesterday_equity": _getattr2(m, "LCTDAB"),          # 昨日權益數
+            "yesterday_balance":_getattr2(m, "LTDAB"),           # 昨日餘額
+            "deposit_withdrawal":_getattr2(m, "DWAMT"),          # 存提
+            # 保證金
+            "original_margin":  _getattr2(m, "IAMT"),            # 原始保證金
+            "maintenance_margin":_getattr2(m, "MAMT"),           # 維持保證金
+            "available_margin": _getattr2(m, "ORDCEXCESS"),      # 可動用(出金)保證金
+            "order_margin":     _getattr2(m, "ORDIAMT"),         # 委託預扣原始保證金
+            # 損益
+            "futures_close_pnl":_getattr2(m, "OSPRTLOS"),        # 期貨平倉損益
+            "futures_float_pnl":_getattr2(m, "PRTLOS"),          # 未沖銷期貨浮動損益
+            "option_close_pnl": _getattr2(m, "OPTOSPRTLOS"),     # 選擇權平倉損益
+            "option_float_pnl": _getattr2(m, "OPTPRTLOS"),       # 選擇權未平倉損益
+            # 費用
+            "commission":       _getattr2(m, "ORIGNFEE"),        # 成交手續費
+            "tax":              _getattr2(m, "CTAXAMT"),          # 成交期交稅
+            # 指標
+            "risk_rate":        _getattr2(m, "OPTRATE"),          # 風險指標
+            "initial_rate":     _getattr2(m, "INIRATE"),          # 原始比率
+            "maintenance_rate": _getattr2(m, "MATRATE"),          # 維持比率
+            "liquidation_ratio":_getattr2(m, "LIQUIDATION_RATIO"), # 清算比率
+            # 夜盤
+            "night_equity":     _getattr2(m, "NIGHT_SESSION_CLOSING_CTDAB"),
+            "night_risk_rate":  _getattr2(m, "NIGHT_SESSION_OPTRATE"),
+            # 更新時間
+            "update_date":      _getattr2(m, "UPDATE_DATE"),
+            "update_time":      _getattr2(m, "UPDATE_TIME"),
+        })
+    return result
+
+
 @app.get("/positions")
 def get_positions():
     """即時部位查詢 — daccount.get_position()
@@ -881,11 +941,11 @@ def get_positions():
         raise HTTPException(status_code=503, detail=f"Unitrade 連線失敗: {exc}")
 
     actno = os.getenv("UNITRADE_ACTNO", "")
-    currency = os.getenv("UNITRADE_CURRENCY", "NTT")
     if not actno:
         raise HTTPException(status_code=500, detail="未設定 UNITRADE_ACTNO 環境變數")
 
-    resp = api.daccount.get_position(actno, currency)
+    # get_position 簽名：get_position(actno, groupid='', trader='')，無 currency 參數
+    resp = api.daccount.get_position(actno)
     if resp is None or not getattr(resp, "ok", False):
         err = getattr(resp, "error", "unknown") if resp else "no response"
         raise HTTPException(status_code=502, detail=f"即時部位查詢失敗: {err}")

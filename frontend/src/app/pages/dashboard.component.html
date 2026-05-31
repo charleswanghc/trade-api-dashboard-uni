@@ -48,6 +48,52 @@
 
   <div class="card">
     <div class="card-header">
+      <div class="card-title">帳戶保證金</div>
+      <span *ngIf="margin?.update_time" class="text-muted" style="font-size:11px">
+        {{ margin?.update_date }} {{ margin?.update_time }}
+      </span>
+    </div>
+    <ng-container *ngIf="margin && !marginError; else noMarginTpl">
+      <div class="info-row">
+        <span class="info-label">權益數</span>
+        <span [class]="pnlClass(margin.equity)" style="font-weight:600">
+          {{ margin.equity != null ? (margin.equity | number:'1.0-0') : '—' }}
+        </span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">可動用保證金</span>
+        <span>{{ margin.available_margin != null ? (margin.available_margin | number:'1.0-0') : '—' }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">原始保證金</span>
+        <span>{{ margin.original_margin != null ? (margin.original_margin | number:'1.0-0') : '—' }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">維持保證金</span>
+        <span>{{ margin.maintenance_margin != null ? (margin.maintenance_margin | number:'1.0-0') : '—' }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">期貨浮動損益</span>
+        <span [class]="pnlClass(margin.futures_float_pnl)">
+          {{ margin.futures_float_pnl != null ? (margin.futures_float_pnl | number:'1.0-0') : '—' }}
+        </span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">風險指標</span>
+        <span [class]="(margin.risk_rate ?? 0) < 130 ? 'text-danger' : ''">
+          {{ margin.risk_rate != null ? (margin.risk_rate | number:'1.0-1') + '%' : '—' }}
+        </span>
+      </div>
+    </ng-container>
+    <ng-template #noMarginTpl>
+      <div class="empty-state" style="padding: 16px; font-size: 12px">
+        {{ marginError ? '查詢失敗（Unitrade 未連線）' : '載入中…' }}
+      </div>
+    </ng-template>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
       <div class="card-title">連線狀態</div>
       <span *ngIf="lastChecked" class="text-muted" style="font-size:11px">
         {{ lastChecked | date:'HH:mm:ss' }}

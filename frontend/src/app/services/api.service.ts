@@ -185,6 +185,11 @@ export class ApiService {
     return this.http.post<{ status: string; message: string }>('/history-sync', {});
   }
 
+  // ========== Margin ==========
+  getMargin() {
+    return this.http.get<Margin[]>('/margin');
+  }
+
   // ========== Positions ==========
   getPositions() {
     return this.http.get<Position[]>('/positions');
@@ -202,6 +207,34 @@ export class ApiService {
   getProductLookupForeign() {
     return this.http.get<any[]>('/product-lookup/foreign');
   }
+}
+
+export interface Margin {
+  actno?: string;
+  account_date?: string;
+  currency?: string;
+  equity?: number;
+  yesterday_equity?: number;
+  yesterday_balance?: number;
+  deposit_withdrawal?: number;
+  original_margin?: number;
+  maintenance_margin?: number;
+  available_margin?: number;
+  order_margin?: number;
+  futures_close_pnl?: number;
+  futures_float_pnl?: number;
+  option_close_pnl?: number;
+  option_float_pnl?: number;
+  commission?: number;
+  tax?: number;
+  risk_rate?: number;
+  initial_rate?: number;
+  maintenance_rate?: number;
+  liquidation_ratio?: number;
+  night_equity?: number;
+  night_risk_rate?: number;
+  update_date?: string;
+  update_time?: string;
 }
 
 export interface Position {
