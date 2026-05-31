@@ -25,9 +25,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   margin: Margin | null = null;
   marginError = false;
   marginErrorMsg = '';
+  marginLoading = false;
 
   private healthPoll?: Subscription;
   private unitradePoll?: Subscription;
+  private prevUnitradeStatus: string | null = null;
 
   constructor(private api: ApiService) {}
 
@@ -58,21 +60,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
         )
       )
       .subscribe(d => {
-        this.unitradeStatus = (d as any)?.unitrade ?? 'disconnected';
+        const status = (d as any)?.unitrade ?? 'disconnected';
+        // 從斷線 → connected 時自動重新載入保證金
+        if (status === 'connected' && this.prevUnitradeStatus !== 'connected') {
+          this.loadMargin();
+        }
+        this.prevUnitradeStatus = status;
+        this.unitradeStatus = status;
       });
 
     // 載入保證金資訊
-    this.api.getMargin().subscribe({
-      next: (data) => {
-        this.margin = data && data.length > 0 ? data[0] : null;
-        this.marginError = false;
-        this.marginErrorMsg = '';
-      },
-      error: (err) => {
-        this.marginError = true;
-        this.marginErrorMsg = err?.error?.detail ?? err?.message ?? '查詢失敗';
-      },
-    });
+    this.loadMargin();
 
     // 只在進入頁面時載入一次
     this.api.getStrategies(true).subscribe({
@@ -97,6 +95,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.healthPoll?.unsubscribe();
     this.unitradePoll?.unsubscribe();
+  }
+
+  loadMargin(): void {
+    if (this.marginLoading) return;
+    this.marginLoading = true;
+    this.api.getMargin().subscribe({
+      next: (data) => {
+        this.margin = data && data.length > 0 ? data[0] : null;
+        this.marginError = false;
+        this.marginErrorMsg = '';
+        this.marginLoading = false;
+      },
+      error: (err) => {
+        this.marginError = true;
+        this.marginErrorMsg = err?.error?.detail ?? err?.message ?? '查詢失敗';
+        this.marginLoading = false;
+      },
+    });
   }
 
   pnlClass(v: number | undefined): string {

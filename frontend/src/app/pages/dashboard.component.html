@@ -49,9 +49,18 @@
   <div class="card">
     <div class="card-header">
       <div class="card-title">帳戶保證金</div>
-      <span *ngIf="margin?.update_time" class="text-muted" style="font-size:11px">
-        {{ margin?.update_date }} {{ margin?.update_time }}
-      </span>
+      <div style="display:flex; align-items:center; gap:8px">
+        <span *ngIf="margin?.update_time" class="text-muted" style="font-size:11px">
+          {{ margin?.update_date }} {{ margin?.update_time }}
+        </span>
+        <button
+          (click)="loadMargin()"
+          [disabled]="marginLoading"
+          style="background:none; border:1px solid var(--border); border-radius:4px; padding:2px 8px; font-size:11px; cursor:pointer; color:var(--text-muted); line-height:1.6"
+          title="重新查詢保證金">
+          {{ marginLoading ? '查詢中…' : '⭮ 重整' }}
+        </button>
+      </div>
     </div>
     <ng-container *ngIf="margin && !marginError; else noMarginTpl">
       <div class="info-row">
