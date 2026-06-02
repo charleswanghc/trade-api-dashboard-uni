@@ -1,6 +1,7 @@
 # TradingView × Unitrade 自動交易系統
 
 此專案將原本的 Shioaji 架構改為 **Angular 20 前端 + FastAPI 後端**，並使用 **統一期貨 Unitrade 官方 Python API** 進行下單。
+原始專案:Forked from luisleo526/shioaji-api-dashboard
 
 ## ✨ 新功能：訊號驅動交易
 
