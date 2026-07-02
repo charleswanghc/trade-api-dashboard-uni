@@ -302,6 +302,8 @@ def accounts_check():
             "available_accounts": accounts,
             "env_actno": env_actno,
             "actno_valid": env_actno in (accounts or []),
+            "primary_url": os.getenv("UNITRADE_WS_URL", ""),
+            "backup_url": os.getenv("UNITRADE_WS_URL_BACKUP", ""),
         }
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
