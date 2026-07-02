@@ -91,6 +91,9 @@
         <div style="color: var(--muted); font-size: 12px;">
           {{ order.created_at }} · {{ order.status }} · {{ order.order_id || order.order_result }}
         </div>
+        <div *ngIf="order.error_message" style="color: #e74c3c; font-size: 12px; margin-top: 2px;">
+          ⚠ {{ order.error_message }}
+        </div>
       </div>
     </div>
     <ng-template #empty>尚無訂單。</ng-template>

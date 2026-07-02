@@ -56,6 +56,13 @@ def get_unitrade_client() -> Unitrade:
             _client = api
             logger.info("Unitrade login succeeded")
 
+            # 登入後取得可用交易帳號清單（用於診斷 actno 設定是否正確）
+            try:
+                available_accounts = api.get_accounts()
+                logger.info("Unitrade available accounts: %s", available_accounts)
+            except Exception as _acc_exc:
+                logger.warning("get_accounts() failed: %s", _acc_exc)
+
             # 登入後同步當日歷史委託/成交（補回程式重啟前的紀錄）
             actno = _get_env("UNITRADE_ACTNO", required=False)
             if actno:
@@ -146,7 +153,14 @@ def _setup_order_callbacks(api: Unitrade) -> None:
                 return
             order = db.query(OrderHistory).filter(OrderHistory.order_id == seq).first()
             if order:
-                order.fill_status = getattr(reply, "orderstatus", None)
+                orderstatus = getattr(reply, "orderstatus", None)
+                order.fill_status = orderstatus
+                # 同步邏輯狀態，但不允許回降（避免中間狀態蓋掉已成交/部分成交）
+                new_status = _orderstatus_to_db_status(orderstatus)
+                _FINALITY = {"pending": 0, "submitted": 1, "partial_filled": 2,
+                             "filled": 3, "cancelled": 3, "failed": 3}
+                if _FINALITY.get(new_status, 1) >= _FINALITY.get(order.status or "pending", 0):
+                    order.status = new_status
                 order.ordno = getattr(reply, "orderno", None)
                 filled = getattr(reply, "matchqty", None)
                 if filled is not None:
@@ -157,8 +171,8 @@ def _setup_order_callbacks(api: Unitrade) -> None:
                 order.updated_at = datetime.utcnow()
                 db.commit()
                 logger.info(
-                    "on_reply: seq=%s orderstatus=%s",
-                    seq, getattr(reply, "orderstatus", ""),
+                    "on_reply: seq=%s orderstatus=%s status=%s",
+                    seq, orderstatus, order.status,
                 )
         except Exception as exc:
             logger.error("on_reply callback error: %s", exc)
@@ -196,24 +210,42 @@ def _setup_order_callbacks(api: Unitrade) -> None:
             )
 
             # 嘗試關聯 OrderHistory
+            linked_order = None
             if orderno:
-                order = db.query(OrderHistory).filter(OrderHistory.ordno == orderno).first()
-                if order:
-                    trade.seq = order.order_id
-                    order.fill_price = match_price
-                    order.fill_quantity = match_qty
-                    order.status = "filled"
-                    order.updated_at = datetime.utcnow()
+                linked_order = db.query(OrderHistory).filter(OrderHistory.ordno == orderno).first()
+                if linked_order:
+                    trade.seq = linked_order.order_id
 
+            # 先 flush 成交記錄，使本筆也納入後續的加權均價計算
             db.add(trade)
+            db.flush()
+
+            # 若有關聯委託，以 trade_records 重新計算加權平均成交價與累計成交量
+            if linked_order:
+                all_trades = (
+                    db.query(TradeRecord)
+                    .filter(TradeRecord.seq == linked_order.order_id)
+                    .all()
+                )
+                total_qty = sum(t.match_qty or 0 for t in all_trades)
+                if total_qty > 0:
+                    linked_order.fill_price = round(
+                        sum((t.match_price or 0) * (t.match_qty or 0) for t in all_trades) / total_qty,
+                        2,
+                    )
+                linked_order.fill_quantity = total_qty
+                linked_order.status = "filled" if total_qty >= linked_order.quantity else "partial_filled"
+                linked_order.updated_at = datetime.utcnow()
+
             db.commit()
             logger.info(
-                "on_match: orderno=%s product=%s bs=%s price=%s qty=%s",
+                "on_match: orderno=%s product=%s bs=%s price=%s qty=%s total_fill_qty=%s",
                 orderno,
                 getattr(match, "productid", ""),
                 getattr(match, "bs", ""),
                 match_price,
                 match_qty,
+                linked_order.fill_quantity if linked_order else None,
             )
         except Exception as exc:
             logger.error("on_match callback error: %s", exc)

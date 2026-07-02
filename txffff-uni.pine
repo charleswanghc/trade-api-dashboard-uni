@@ -1,0 +1,281 @@
+//@version=5
+strategy("TXF_15M_vivi_uniTradeAPI", overlay=true , pyramiding = 2)
+
+// =========================
+// === API Alert 輔助設定 ===
+// =========================
+strategyName = input.string("TXF_15M_vivi_uniTradeAPI", title="策略名稱")
+
+makeAlert(action, side, price, stopLoss = 0.0, note = "") =>
+    alertMsg = '{"strategy":"' + strategyName + '"'
+    alertMsg := alertMsg + ',"action":"' + action + '"'
+    alertMsg := alertMsg + ',"side":"' + side + '"'
+    alertMsg := alertMsg + ',"quantity":1'
+    alertMsg := alertMsg + ',"price":' + str.tostring(price)
+    if stopLoss > 0
+        alertMsg := alertMsg + ',"stop_loss":' + str.tostring(stopLoss)
+    if note != ""
+        alertMsg := alertMsg + ',"note":"' + note + '"'
+    alertMsg := alertMsg + '}'
+    alertMsg
+
+// ============
+// 參數
+// hh 4
+// ll 23
+// ATR 10
+// snk 7
+// lnk 21
+// nk 6
+// 加碼K 4
+// Lmore 15
+// ============
+
+
+// 定義變數
+var bool profitReached = na
+var series float lastMarketPosition = 0
+var bool varH0 = na
+var float varH1 = na
+var bool varL0 = na
+var float varL1 = na
+var bool conditionH1 = false
+var bool conditionL1 = na
+var float lastPivHigh = na
+var float lastPivLow = na
+var bool shortFilterCondition = false
+var simple int pastKhh = input.int(4, title='hh:過去高的K棒數')
+var simple int pastKll = input.int(23, title='ll:過去低的K棒數')
+
+
+// 如果上一次的市場倉位不等於當前的市場倉位，則將profitReached重置為false，lastMarketPosition更新為當前的市場倉位
+if (lastMarketPosition !=  strategy.position_size)
+    profitReached := false
+    lastMarketPosition := strategy.position_size
+
+// plotchar(lastMarketPosition, "lastMarketPosition", "", location = location.belowbar)
+
+
+//因為沒有swingHigh,所以用曲軸來計算
+var hhLeftStrength = pastKhh
+var hhRightStrength = pastKhh+1
+
+pivHigh = ta.pivothigh(hhLeftStrength, hhRightStrength)
+
+// 繪圖，要向左offset長度數量才會標在正確高點上
+plotshape(na(pivHigh)?false:true,"pivHighFlag", offset = -(pastKhh+1), color=color.red, style=shape.triangleup ,size=size.tiny,  location=location.abovebar)
+if(na(pivHigh) != true)
+    label.new(bar_index[pastKhh+1], pivHigh+4 , style=label.style_none ,text= str.tostring(pivHigh) + "\n" ,textcolor = color.rgb(255, 82, 82))
+
+
+// 有新的高點，則把新的轉折高存進去數值內，並設置var0和var1值
+if(na(pivHigh) != true)
+    lastPivHigh := pivHigh
+    varH0 := true
+    // varH1 := high[pastKhh]
+    varH1 := pivHigh
+
+// 如果正在出現新高，則把var0改為false避免重複進場
+else if (varH0 == true and high >= (varH1 + syminfo.mintick))
+    varH0 := false
+
+
+plotchar(lastPivHigh, "lastPivHigh", "")
+plotchar(varH0, "varH0", "")
+plotchar(varH1, "varH1", "")
+
+
+// 高點突破交易
+if (varH0 == true and lastMarketPosition <= 0)
+    _buyStopPrice = (varH1 + syminfo.mintick)
+    strategy.entry(
+         "Buy",
+         strategy.long,
+         stop=_buyStopPrice,
+         alert_message=makeAlert("entry", "buy", _buyStopPrice, 0.0, "Buy")
+     )
+
+
+
+//因為沒有swingLow,所以用曲軸來計算
+var llLeftStrength =pastKll
+var llRightStrength = pastKll+1
+
+pivLow = ta.pivotlow(llLeftStrength, llRightStrength)
+
+// 繪圖，要向左offset長度數量才會標在正確低點上
+plotshape(na(pivLow)?false:true,"pivLowFlag",offset = -(pastKll+1), color=color.rgb(27, 188, 51), style=shape.triangledown ,size=size.tiny , location=location.belowbar)
+if(na(pivLow) != true)
+    label.new(bar_index[pastKll+1], pivLow-36 , style=label.style_none ,text= str.tostring(pivLow) + "\n" ,textcolor = color.rgb(27, 188, 51))
+
+// 有新的低點，則把新的轉折低存進去數值內，並設置var0和var1值
+if(na(pivLow) != true)
+    lastPivLow := pivLow
+    varL0 := true
+    // varL1 := low[pastKll]
+    varL1 := pivLow
+
+// 如果正在出現新低，則把var0改為false避免重複進場
+else
+    if (varL0 == true and low <= (varL1 - syminfo.mintick))
+        varL0 := false
+
+plotchar(lastPivLow, "lastPivLow", "", location = location.belowbar)
+plotchar(varL0, "varL0", "")
+plotchar(varL1, "varL1", "")
+
+// 低點突破交易(濾網)
+// 動態計算條件
+var int myCount =na
+myCount := ta.barssince(close < ta.ema(close[1], 5))
+
+myCondition = close < ta.ema(close[1], 5)
+shortFilterCondition := (myCount >= 1)?true:false
+
+// 繪製訊號標記
+plotchar(myCount, "myCount", "")
+plotchar(shortFilterCondition, "shortFilterCondition", "")
+
+
+// 低點突破交易
+if (varL0 == true)
+    // if (varL0 ==true and shortFilterCondition ==true  )
+    _sellStopPrice = (varL1 - syminfo.mintick)
+    strategy.entry(        "Sell",        strategy.short,        stop=_sellStopPrice,        alert_message=makeAlert("entry", "sell", _sellStopPrice, 0.0, "Sell")    )
+
+
+ATRLength = input(20, title="ATR Length")
+SNK = input(7, title="SNK")
+LNK = input(21, title="LNK")
+nk = input(6, title="nk")
+
+ATRValue = ta.atr(ATRLength)
+
+plotchar(ATRValue, "ATRValue", "")
+
+
+var float trailLongStop = na
+var float trailShortStop = na
+var float entryPrice = na
+
+entryPrice := strategy.opentrades.entry_price(strategy.opentrades-1)
+
+plotchar(entryPrice, "entryPrice", "")
+
+// 多頭止損和追蹤停利
+trailLongStop := ta.lowest(low, 4)[1]
+if (lastMarketPosition > 0)
+    if ((entryPrice - close) > (ATRValue * SNK))
+        _dropLStop = (trailLongStop - syminfo.mintick)
+        strategy.exit(            "Drop L",            stop=_dropLStop,            alert_message=makeAlert("exit", "sell", _dropLStop, 0.0, "Drop L")        )
+    else
+        if (close - entryPrice > ATRValue * LNK)
+            profitReached := true
+
+        if (profitReached == true)
+            _trailLStop = (trailLongStop - syminfo.mintick)
+            strategy.exit(                "Trailing L",                stop=_trailLStop,                alert_message=makeAlert("exit", "sell", _trailLStop, 0.0, "Trailing L")            )
+
+
+plotchar(trailLongStop, "trailLongStop", "")
+plotchar(ATRValue * SNK, "ATRValue * SNK", "")
+plotchar(ATRValue * LNK, "ATRValue * LNK", "")
+plotchar(close, "close", "")
+plotchar(entryPrice, "entryPrice", "")
+
+// 空頭止損和追蹤停利
+trailShortStop := ta.highest(high, 4)[1]
+if (lastMarketPosition < 0)
+    if ((close - entryPrice) > (ATRValue * nk))
+        _dropSStop = (trailShortStop + syminfo.mintick)
+        strategy.exit(            "Drop S",            stop=_dropSStop,            alert_message=makeAlert("exit", "buy", _dropSStop, 0.0, "Drop S")        )
+    else
+        if ((entryPrice - close) > (ATRValue * nk))
+            profitReached := true
+
+        if (profitReached == true)
+            _trailSStop = (trailShortStop + syminfo.mintick)
+            strategy.exit(                "Trailing S",                stop=_trailSStop,                alert_message=makeAlert("exit", "buy", _trailSStop, 0.0, "Trailing S")            )
+
+
+
+// 绘制 ATR 值和追踪停利/止損水平
+plot(ATRValue, title="ATR Value", color=color.blue)
+plot(trailLongStop, title="Long Trail Stop", color=color.red)
+plot(trailShortStop, title="Short Trail Stop", color=color.green)
+
+
+
+// 設置時間
+startHour = input(9, title="開始小時")
+startMinute = input(15, title="開始分鐘")
+endHour = input(13, title="結束小時")
+endMinute = input(15, title="結束分鐘")
+
+startTime = timestamp(year, month, dayofmonth, startHour, startMinute)
+endTime = timestamp(year, month, dayofmonth, endHour, endMinute)
+
+// 加碼時間限制
+condition32 = time >= startTime and time <= endTime
+bgcolor(time >= startTime and time <= endTime ? color.new(color.green, 90) : na)
+
+
+
+
+var float buyLow2 = na
+var bool buyLow2Flag = na
+var float lastAddPivLow = na
+var simple int pastKAdd = input.int(4, title='過去段加碼的K棒數')
+var bool isBuyLow2In = false
+
+//因為沒有swingLow,所以用曲軸來計算
+var AddLowLeftStrength = pastKAdd
+var AddLowRightStrength = pastKAdd+1
+
+AddPivLow = ta.pivotlow(AddLowLeftStrength, AddLowRightStrength)
+
+// 繪圖，要向左offset長度數量才會標在正確低點上
+plotshape((na(AddPivLow)?false:true ) and (condition32 ==true),"AddPivLowFlag",offset = -(pastKAdd+1), color=color.rgb(204, 65, 195), style=shape.cross ,size=size.tiny ,location=location.belowbar ,text="\n\n▲" ,textcolor = color.rgb(204, 65, 195) )
+
+if(na(AddPivLow) != true and condition32 ==true)
+    label.new(bar_index[pastKAdd+1], AddPivLow-24 , style=label.style_none ,text="Add Low" + str.tostring(AddPivLow) + "\n" ,textcolor = color.rgb(204, 65, 195))
+
+
+// 有新的加碼轉折低點且在日盤，則把新的轉折低存進去數值內，並設置lastAddPivLow和buyLow2Flag值
+if(na(AddPivLow) != true  and condition32 ==true)
+    lastAddPivLow := AddPivLow
+    buyLow2Flag := true
+    buyLow2 := low[pastKAdd]
+    isBuyLow2In := true
+
+else
+    if (buyLow2Flag == true and low <= (buyLow2 - syminfo.mintick))
+        buyLow2Flag := false
+
+plotchar(lastMarketPosition, "lastMarketPosition", "")
+plotchar(condition32, "condition32", "")
+plotchar(buyLow2Flag, "buyLow2Flag", "")
+plotchar(buyLow2, "buyLow2", "")
+plotchar(strategy.position_avg_price, "position_avg_price", "")
+
+
+// 符合加碼條件後交易
+var float lastEntryPrice =  na
+lastEntryPrice := strategy.opentrades.entry_price(strategy.opentrades-1)
+if (lastMarketPosition > 0 and condition32==true and buyLow2Flag==true and buyLow2 > (lastEntryPrice - syminfo.mintick) and isBuyLow2In == true)
+    _buy2StopPrice = (buyLow2 + syminfo.mintick)
+    strategy.entry(        "Buy_2",        strategy.long,        stop=_buy2StopPrice,        alert_message=makeAlert("entry", "buy", _buy2StopPrice, 0.0, "Buy_2")    )
+    isBuyLow2In := false
+
+
+// 超過前低點的條件下做空(避免快速下跌沒翻空)
+var simple int Lmore = input(15, title="Lmore")
+var float LmoreNumber = na
+
+LmoreNumber := ta.lowest(low, Lmore)
+plotchar(LmoreNumber, "LmoreNumber", "")
+
+if (lastMarketPosition == 0)
+    if (LmoreNumber < varL1)
+        _lowEsetLimitPrice = (LmoreNumber - syminfo.mintick)
+        strategy.entry(            "lowEset",            strategy.short,            limit=_lowEsetLimitPrice,            alert_message=makeAlert("entry", "sell", _lowEsetLimitPrice, 0.0, "lowEset")        )

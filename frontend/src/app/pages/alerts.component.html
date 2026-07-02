@@ -19,6 +19,7 @@
             <th>數量</th>
             <th>委託單號</th>
             <th>狀態</th>
+            <th>失敗原因</th>
           </tr>
         </thead>
         <tbody>
@@ -38,9 +39,12 @@
             </td>
             <td>
               <span class="badge"
-                [ngClass]="s.status === 'success' ? 'success' : (s.status === 'error' ? 'error' : 'info')">
+                [ngClass]="s.status === 'processed' || s.status === 'ok' ? 'success' : (s.status === 'failed' || s.status === 'error' ? 'error' : (s.status === 'ignored' ? 'warning' : 'info'))">
                 {{ s.status }}
               </span>
+            </td>
+            <td style="font-size: 12px; color: #e74c3c; max-width: 200px; word-break: break-all">
+              {{ s.error_message || '—' }}
             </td>
           </tr>
         </tbody>

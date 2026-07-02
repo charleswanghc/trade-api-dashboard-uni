@@ -290,6 +290,23 @@ def unitrade_health_check():
         return {"status": "error", "unitrade": "disconnected", "error": str(exc)}
 
 
+@app.get("/health/accounts")
+def accounts_check():
+    """回傳 Unitrade 可用交易帳號清單（用於診斷 actno 設定）"""
+    try:
+        api = get_unitrade_client()
+        accounts = api.get_accounts()
+        env_actno = os.getenv("UNITRADE_ACTNO", "")
+        return {
+            "status": "ok",
+            "available_accounts": accounts,
+            "env_actno": env_actno,
+            "actno_valid": env_actno in (accounts or []),
+        }
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
 # ==================== 下單核心函式 ====================
 
 def submit_unitrade_order(
