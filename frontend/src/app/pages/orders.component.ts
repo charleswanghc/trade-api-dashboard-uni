@@ -1,7 +1,7 @@
 ﻿import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ApiService } from '../services/api.service';
+import { ApiService, OrderHistory } from '../services/api.service';
 
 @Component({
   selector: 'app-orders',
@@ -11,7 +11,7 @@ import { ApiService } from '../services/api.service';
   styleUrl: './orders.component.scss',
 })
 export class OrdersComponent implements OnInit {
-  orders: any[] = [];
+  orders: OrderHistory[] = [];
   message = '';
   loading = false;
   productSuggestions: { code: string; label: string }[] = [];
@@ -121,6 +121,32 @@ export class OrdersComponent implements OnInit {
 
   loadOrders(): void {
     this.api.listOrders().subscribe((data) => (this.orders = data || []));
+  }
+
+  getOrderStateClass(order: OrderHistory): string {
+    if (order.error_message || order.status === 'failed') return 'error';
+    if (order.fill_status?.includes('成功') || order.status === 'filled') return 'success';
+    if (order.status === 'submitted') return 'warning';
+    return 'info';
+  }
+
+  getOrderStateLabel(order: OrderHistory): string {
+    if (order.error_message || order.status === 'failed') return '送單失敗';
+    if (order.status === 'filled') return '已成交';
+    if (order.fill_status?.includes('成功')) return '委託成功';
+    if (order.status === 'submitted') return '已送出';
+    return order.status;
+  }
+
+  getOrderStateDetail(order: OrderHistory): string {
+    if (order.error_message) return order.error_message;
+    if (order.fill_quantity && order.fill_quantity > 0) {
+      const avgPrice = order.fill_price ? `，均價 ${order.fill_price}` : '';
+      return `已成交 ${order.fill_quantity} 口${avgPrice}`;
+    }
+    if (order.fill_status) return `${order.fill_status}；目前成交口數 ${order.fill_quantity ?? 0}`;
+    if (order.status === 'submitted') return '委託已送至交易系統，等待成交或回報';
+    return order.order_result || '—';
   }
 
   // ─── 商品代碼查詢器 ───

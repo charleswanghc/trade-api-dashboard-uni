@@ -43,7 +43,7 @@ def get_unitrade_client() -> Unitrade:
         account = _get_env("UNITRADE_ACCOUNT")
         password = _get_env("UNITRADE_PASSWORD")
         cert_file = _get_env("UNITRADE_CERT_FILE")
-        cert_password = _get_env("UNITRADE_CERT_PASSWORD")
+        cert_password = _get_env("UNITRADE_CERT_PASSWORD", required=False) or ""
 
         try:
             api = Unitrade()

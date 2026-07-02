@@ -87,12 +87,17 @@
     <h2>最近訂單</h2>
     <div *ngIf="orders.length; else empty">
       <div *ngFor="let order of orders" style="padding: 8px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.15);">
-        <div>{{ order.symbol }} / {{ order.action }} / {{ order.quantity }} / {{ order.source }}</div>
-        <div style="color: var(--muted); font-size: 12px;">
-          {{ order.created_at }} · {{ order.status }} · {{ order.order_id || order.order_result }}
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <strong>{{ order.symbol }}</strong>
+          <span>/ {{ order.action }} / {{ order.quantity }} / {{ order.source }}</span>
+          <span class="badge" [ngClass]="getOrderStateClass(order)">{{ getOrderStateLabel(order) }}</span>
         </div>
-        <div *ngIf="order.error_message" style="color: #e74c3c; font-size: 12px; margin-top: 2px;">
-          ⚠ {{ order.error_message }}
+        <div style="color: var(--muted); font-size: 12px;">
+          {{ order.created_at }} · 單號 {{ order.order_id || '—' }}
+        </div>
+        <div style="font-size: 12px; margin-top: 2px; word-break: break-word;"
+          [style.color]="order.error_message ? '#e74c3c' : 'var(--muted)'">
+          {{ getOrderStateDetail(order) }}
         </div>
       </div>
     </div>

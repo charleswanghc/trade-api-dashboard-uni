@@ -86,6 +86,33 @@ export interface SignalHistory {
   created_at: string;
 }
 
+export interface OrderHistory {
+  id: number;
+  symbol: string;
+  code?: string;
+  action: string;
+  quantity: number;
+  price?: number;
+  strategy?: string;
+  order_type?: string;
+  order_condition?: string;
+  open_close_flag?: string;
+  dtrade?: string;
+  note?: string;
+  account?: string;
+  sub_account?: string;
+  source?: string;
+  status: string;
+  order_result?: string;
+  error_message?: string;
+  created_at: string;
+  order_id?: string;
+  fill_status?: string;
+  fill_quantity?: number;
+  fill_price?: number;
+  updated_at?: string;
+}
+
 export interface TradeRecord {
   id: number;
   seq?: string;
@@ -118,7 +145,7 @@ export class ApiService {
   }
 
   listOrders() {
-    return this.http.get<any[]>('/orders');
+    return this.http.get<OrderHistory[]>('/orders');
   }
 
   placeOrder(payload: OrderRequest) {
@@ -127,7 +154,7 @@ export class ApiService {
 
   // ========== Strategy Management ==========
   getStrategies(enabledOnly = false) {
-    const params = enabledOnly ? { enabled_only: 'true' } : {};
+    const params: Record<string, string> = enabledOnly ? { enabled_only: 'true' } : {};
     return this.http.get<StrategyConfig[]>('/strategies', { params });
   }
 
