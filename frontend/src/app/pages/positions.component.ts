@@ -36,7 +36,10 @@ export class PositionsComponent implements OnInit {
         this.api.getUnliquidations().subscribe({
           next: (u) => { this.unliquidations = u; this.loading = false; },
           error: (e) => {
-            this.error = e?.error?.detail || err?.error?.detail || '載入失敗';
+            const raw = e?.error?.detail || err?.error?.detail;
+            this.error = (e?.status === 0 || err?.status === 0)
+              ? '帳務查詢服務暫不可用（可能需申請帳務查詢權限）'
+              : raw || '載入失敗';
             this.loading = false;
           },
         });

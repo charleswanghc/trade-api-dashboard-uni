@@ -108,7 +108,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.marginError = true;
-        this.marginErrorMsg = err?.error?.detail ?? err?.message ?? '查詢失敗';
+        // status 0 = 瀏覽器 CORS 或網路層錯誤，通常是帳務查詢權限未開放
+        if (err?.status === 0) {
+          this.marginErrorMsg = '帳務查詢服務暫不可用（可能需申請帳務查詢權限）';
+        } else {
+          this.marginErrorMsg = err?.error?.detail ?? err?.message ?? '查詢失敗';
+        }
         this.marginLoading = false;
       },
     });

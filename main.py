@@ -905,7 +905,7 @@ def get_margin():
     resp = api.daccount.get_margin(actno, currency)
     if resp is None or not getattr(resp, "ok", False):
         err = getattr(resp, "error", "unknown") if resp else "no response"
-        raise HTTPException(status_code=502, detail=f"保證金查詢失敗: {err}")
+        raise HTTPException(status_code=503, detail=f"保證金查詢失敗: {err}")
 
     result = []
     for m in (resp.data or []):
@@ -965,7 +965,7 @@ def get_positions():
     resp = api.daccount.get_position(actno)
     if resp is None or not getattr(resp, "ok", False):
         err = getattr(resp, "error", "unknown") if resp else "no response"
-        raise HTTPException(status_code=502, detail=f"即時部位查詢失敗: {err}")
+        raise HTTPException(status_code=503, detail=f"即時部位查詢失敗: {err}")
 
     result = []
     for p in (resp.data or []):
@@ -1016,7 +1016,7 @@ def get_unliquidations():
     resp = api.daccount.get_unliquidation(actno, currency)
     if resp is None or not getattr(resp, "ok", False):
         err = getattr(resp, "error", "unknown") if resp else "no response"
-        raise HTTPException(status_code=502, detail=f"未平倉查詢失敗: {err}")
+        raise HTTPException(status_code=503, detail=f"未平倉查詢失敗: {err}")
 
     result = []
     for u in (resp.data or []):
