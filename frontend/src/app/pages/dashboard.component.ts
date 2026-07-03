@@ -28,6 +28,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   unitradeStatus: string | null = null;
 
   private readonly FINAL_STATUSES = new Set(['filled', 'cancelled', 'failed']);
+
+  /** 判斷訂單是否尚未達到終態（需繼續輪詢） */
+  private isOrderPending(o: OrderHistory): boolean {
+    if (this.FINAL_STATUSES.has(o.status)) return false;
+    // submitted 且有 order_id 但尚無 fill_status → 交易所回報尚未到達
+    if (o.status === 'submitted' && o.order_id && !o.fill_status) return true;
+    return false;
+  }
   private orderPoll?: Subscription;
   margin: Margin | null = null;
   marginError = false;
@@ -129,7 +137,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /** 有非終態訂單時每 3 秒輪詢，直到全部終結或元件銷毀 */
   private startOrderPolling(): void {
     this.orderPoll?.unsubscribe();
-    if (!this.recentOrders.some(o => !this.FINAL_STATUSES.has(o.status))) return;
+    if (!this.recentOrders.some(o => this.isOrderPending(o))) return;
     this.orderPoll = timer(3000, 3000).subscribe(() => {
       this.api.listOrders().subscribe({
         next: d => {
@@ -140,7 +148,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.rejectedOrders = all
             .filter(o => this._parseFillStatus(o.fill_status).isReject || o.status === 'failed')
             .slice(0, 3);
-          if (!this.recentOrders.some(o => !this.FINAL_STATUSES.has(o.status))) {
+          if (!this.recentOrders.some(o => this.isOrderPending(o))) {
             this.orderPoll?.unsubscribe();
           }
         },
@@ -285,7 +293,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private _parseFillStatus(fill: string | undefined): { isReject: boolean; text: string } {
     if (!fill) return { isReject: false, text: '' };
     const cleaned = fill.replace(/\s+/g, ' ').trim();
-    const isReject = /PSC\d+|拒絕|不足|保金|保證金不足/.test(cleaned);
+    // 包含交易所錯誤碼（PSC/FUF/ORD/ACC…）或拒絕關鍵字
+    const isReject = /[A-Z]{2,4}\d+|\u62d2絕|不足|保金|保證金不足|無足夠|非內期|超限/.test(cleaned);
     return { isReject, text: cleaned };
   }
 
@@ -304,12 +313,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const { isReject } = this._parseFillStatus(order.fill_status);
     if (isReject) return '拒單';
     if (order.fill_status?.includes('完全成交') || order.status === 'filled') return '完全成交';
-    if (order.fill_status?.includes('成功')) return '委聆成功';
+    if (order.fill_status?.includes('成功') || order.fill_status?.includes('委託成功')) return '委託成功';
     if (order.fill_quantity && order.fill_quantity > 0) return '已成交';
-    if (!order.fill_status) return this._orderBrokerResult(order).issend === true ? '等待回報' : '未送達';
+    if (!order.fill_status) return this._orderBrokerResult(order).issend === true ? '洗單中…' : '未送達';
     if (order.fill_status.includes('完全成交')) return '完全成交';
     if (order.fill_status.includes('部分')) return '部分成交';
-    if (order.fill_status.includes('刪單')) return '已刪單';
+    if (order.fill_status.includes('則除') || order.fill_status.includes('刷單')) return '已則除';
     return order.fill_status.split(':')[0].trim() || order.fill_status;
   }
   getOrderExchangeDetail(order: OrderHistory): string {

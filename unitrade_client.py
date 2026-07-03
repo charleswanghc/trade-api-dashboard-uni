@@ -259,7 +259,7 @@ def _setup_order_callbacks(api: Unitrade) -> None:
 
 
 def _orderstatus_to_db_status(orderstatus: Optional[str]) -> str:
-    """將交易所回傳的 orderstatus 對應成 DB 使用的 status 字串。"""
+    """將交易所回傳的 orderstatus / statuscode 對應成 DB 使用的 status 字串。"""
     if not orderstatus:
         return "submitted"
     s = orderstatus
@@ -267,9 +267,14 @@ def _orderstatus_to_db_status(orderstatus: Optional[str]) -> str:
         return "filled"
     if "部分成交" in s:
         return "partial_filled"
-    if any(k in s for k in ("刪除", "取消", "撤單")):
+    if any(k in s for k in ("則除", "取消", "撤單", "刷單成功")):
         return "cancelled"
-    if any(k in s for k in ("失敗", "拒絕", "保證金", "不足", "錯誤")):
+    # PSC/FUF/其他交易所拒絕代碼以及中文描述
+    if any(k in s for k in (
+        "PSC", "FUF", "ORD", "ACC",   # 交易所錯誤碼前罪
+        "失敗", "拒絕", "保證金", "不足", "錯誤",
+        "無足夠", "非內期", "超限",  # FUF 種類文字
+    )):
         return "failed"
     return "submitted"
 

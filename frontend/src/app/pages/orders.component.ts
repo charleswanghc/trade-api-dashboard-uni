@@ -218,12 +218,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const { isReject } = this.parseFillStatus(order.fill_status);
     if (isReject) return '拒單';
     if (order.fill_status?.includes('完全成交') || order.status === 'filled') return '完全成交';
-    if (order.fill_status?.includes('成功')) return '委聆成功';
+    if (order.fill_status?.includes('委託成功') || order.fill_status?.includes('成功')) return '委託成功';
     if (order.fill_quantity && order.fill_quantity > 0) return '已成交';
-    if (!order.fill_status) return this._brokerResult(order).issend === true ? '等待回報' : '未送達';
+    if (!order.fill_status) return this._brokerResult(order).issend === true ? '洗單中…' : '未送達';
     if (order.fill_status.includes('完全成交')) return '完全成交';
     if (order.fill_status.includes('部分')) return '部分成交';
-    if (order.fill_status.includes('刪單')) return '已刪單';
+    if (order.fill_status.includes('刪單') || order.fill_status.includes('刷單')) return '已刪單';
     return order.fill_status.split(':')[0].trim() || order.fill_status;
   }
   getExchangeDetail(order: OrderHistory): string {
@@ -242,7 +242,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   private parseFillStatus(fill: string | undefined): { isReject: boolean; text: string } {
     if (!fill) return { isReject: false, text: '' };
     const cleaned = fill.replace(/\s+/g, ' ').trim();
-    const isReject = /PSC\d+|拒絕|不足|保金|保證金不足/.test(cleaned);
+    // 包含交易所錯誤碼（PSC/FUF/ORD/ACC…）或拒絕關鍵字
+    const isReject = /[A-Z]{2,4}\d+|\u62d2絕|不足|保金|保證金不足|無足夠|非內期|超限/.test(cleaned);
     return { isReject, text: cleaned };
   }
 
