@@ -62,6 +62,34 @@ export class TradesComponent implements OnInit {
     return /TTO|拒絕|保證金|不足|錯誤|失敗/.test(status);
   }
 
+  /**
+   * pfctrade match_time 格式：HHMMSSZZZ (9 位數字字串)
+   * 例："104508120" → "10:45:08"
+   * 若有 mdate (YYYYMMDD)，合併顯示 "MM/DD HH:MM:SS"
+   */
+  formatMatchTime(trade: TradeRecord): string {
+    const raw = trade.match_time;
+    const mdate = trade.mdate;
+
+    let timeStr = '';
+    if (raw && /^\d{9}$/.test(raw)) {
+      const h = raw.slice(0, 2);
+      const m = raw.slice(2, 4);
+      const s = raw.slice(4, 6);
+      timeStr = `${h}:${m}:${s}`;
+    } else if (raw) {
+      timeStr = raw;
+    }
+
+    if (mdate && /^\d{8}$/.test(mdate)) {
+      const mo = mdate.slice(4, 6);
+      const d  = mdate.slice(6, 8);
+      return timeStr ? `${mo}/${d} ${timeStr}` : `${mo}/${d}`;
+    }
+
+    return timeStr || '–';
+  }
+
   syncHistory(): void {
     this.syncing = true;
     this.syncMessage = '';
