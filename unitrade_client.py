@@ -30,11 +30,7 @@ def _get_env(name: str, required: bool = True) -> Optional[str]:
 
 
 def get_unitrade_client() -> Unitrade:
-    """Get a logged-in Unitrade client (singleton).
-
-    登入時依序嘗試 UNITRADE_WS_URL 與 UNITRADE_WS_URL_BACKUP 兩個伺服器；
-    第一個登入成功的即作為本次使用的連線，直到容器重啟為止。
-    """
+    """Get a logged-in Unitrade client (singleton)."""
     global _client
     if _client is not None:
         return _client
@@ -43,52 +39,40 @@ def get_unitrade_client() -> Unitrade:
         if _client is not None:
             return _client
 
+        ws_url = _get_env("UNITRADE_WS_URL")
         account = _get_env("UNITRADE_ACCOUNT")
         password = _get_env("UNITRADE_PASSWORD")
         cert_file = _get_env("UNITRADE_CERT_FILE")
         cert_password = _get_env("UNITRADE_CERT_PASSWORD", required=False) or ""
 
-        # 主伺服器 + 備援伺服器，依序嘗試
-        primary_url  = _get_env("UNITRADE_WS_URL")
-        backup_url   = _get_env("UNITRADE_WS_URL_BACKUP", required=False)
-        urls_to_try  = [u for u in [primary_url, backup_url] if u]
+        try:
+            api = Unitrade()
 
-        last_exc: Optional[Exception] = None
-        for ws_url in urls_to_try:
+            # 依官方文件：先掛 callbacks，再執行 login
+            # 確保連線事件與委託回報在登入過程中不會被漏掉
+            _setup_order_callbacks(api)
+
+            api.login(ws_url, account, password, cert_file, cert_password)
+            _client = api
+            logger.info("Unitrade login succeeded")
+
+            # 登入後取得可用交易帳號清單（用於診斷 actno 設定是否正確）
             try:
-                api = Unitrade()
-                _setup_order_callbacks(api)
-                api.login(ws_url, account, password, cert_file, cert_password)
-                _client = api
-                logger.info("Unitrade login succeeded (url=%s)", ws_url)
+                available_accounts = api.get_accounts()
+                logger.info("Unitrade available accounts: %s", available_accounts)
+            except Exception as _acc_exc:
+                logger.warning("get_accounts() failed: %s", _acc_exc)
 
-                # 登入後取得可用交易帳號清單（用於診斷 actno 設定是否正確）
-                try:
-                    available_accounts = api.get_accounts()
-                    logger.info("Unitrade available accounts: %s", available_accounts)
-                except Exception as _acc_exc:
-                    logger.warning("get_accounts() failed: %s", _acc_exc)
+            # 登入後同步當日歷史委託/成交（補回程式重啟前的紀錄）
+            actno = _get_env("UNITRADE_ACTNO", required=False)
+            if actno:
+                stats = _sync_history(api, actno)
+                logger.info("Startup history sync stats: %s", stats)
 
-                # 登入後同步當日歷史委託/成交（補回程式重啟前的紀錄）
-                actno = _get_env("UNITRADE_ACTNO", required=False)
-                if actno:
-                    stats = _sync_history(api, actno)
-                    logger.info("Startup history sync stats: %s", stats)
-
-                return api
-            except Exception as exc:
-                logger.warning("Unitrade login failed (url=%s): %s", ws_url, exc)
-                last_exc = exc
-                # 重置 SDK 實例，下一個 URL 重新嘗試
-                try:
-                    api.logout()
-                except Exception:
-                    pass
-
-        # 所有 URL 都失敗
-        raise UnitradeLoginError(
-            f"All Unitrade URLs failed. Last error: {last_exc}"
-        ) from last_exc
+            return api
+        except Exception as exc:  # Unitrade SDK raises generic exceptions
+            logger.exception("Unitrade login failed: %s", exc)
+            raise UnitradeLoginError(str(exc)) from exc
 
 
 def serialize_order_result(result: Any) -> str:
@@ -169,16 +153,8 @@ def _setup_order_callbacks(api: Unitrade) -> None:
                 return
             order = db.query(OrderHistory).filter(OrderHistory.order_id == seq).first()
             if order:
-                orderstatus = str(getattr(reply, "orderstatus", "") or "").strip()
-                statuscode  = str(getattr(reply, "statuscode",  "") or "").strip()
-                errormsg    = str(getattr(reply, "errormsg",    "") or "").strip()
-
-                # orderstatus 為空時，用 statuscode / errormsg 組合拒單資訊（如 PSC0019:保證金不足）
-                if not orderstatus and (statuscode or errormsg):
-                    parts = [p for p in [statuscode, errormsg] if p]
-                    orderstatus = ":".join(parts)
-
-                order.fill_status = orderstatus or None
+                orderstatus = getattr(reply, "orderstatus", None)
+                order.fill_status = orderstatus
                 # 同步邏輯狀態，但不允許回降（避免中間狀態蓋掉已成交/部分成交）
                 new_status = _orderstatus_to_db_status(orderstatus)
                 _FINALITY = {"pending": 0, "submitted": 1, "partial_filled": 2,
@@ -195,8 +171,8 @@ def _setup_order_callbacks(api: Unitrade) -> None:
                 order.updated_at = datetime.utcnow()
                 db.commit()
                 logger.info(
-                    "on_reply: seq=%s orderstatus=%s statuscode=%s errormsg=%s status=%s",
-                    seq, orderstatus, statuscode, errormsg, order.status,
+                    "on_reply: seq=%s orderstatus=%s status=%s",
+                    seq, orderstatus, order.status,
                 )
         except Exception as exc:
             logger.error("on_reply callback error: %s", exc)
