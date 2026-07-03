@@ -96,7 +96,7 @@
           </span>
           <span style="font-size:13px">{{ order.quantity }} 口</span>
           <span class="text-muted" style="font-size:11px;margin-left:auto">
-            {{ order.created_at | date:'MM/dd HH:mm:ss' }}
+            {{ (order.created_at + 'Z') | date:'MM/dd HH:mm:ss' }}
           </span>
         </div>
 

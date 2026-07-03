@@ -89,7 +89,7 @@
           {{ o.fill_status || '–' }}
         </td>
         <td>{{ o.fill_quantity ?? '–' }}</td>
-        <td>{{ o.updated_at ? (o.updated_at | date:'yyyy/MM/dd HH:mm:ss') : '–' }}</td>
+        <td>{{ o.updated_at ? ((o.updated_at + 'Z') | date:'yyyy/MM/dd HH:mm:ss') : '–' }}</td>
       </tr>
     </tbody>
   </table>

@@ -94,7 +94,7 @@ export class TradesComponent implements OnInit {
     // 從 created_at 取台灣日期 (UTC+8)
     if (trade.created_at && timeStr) {
       const twDate = new Date(
-        new Date(trade.created_at).getTime() + 8 * 60 * 60 * 1000
+        new Date(trade.created_at + 'Z').getTime() + 8 * 60 * 60 * 1000
       );
       const y  = twDate.getUTCFullYear();
       const mo = String(twDate.getUTCMonth() + 1).padStart(2, '0');

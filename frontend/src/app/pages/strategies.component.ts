@@ -139,7 +139,7 @@ export class StrategiesComponent implements OnInit {
   }
 
   formatDate(date: string): string {
-    return new Date(date).toLocaleString('zh-TW');
+    return new Date(date + 'Z').toLocaleString('zh-TW');
   }
 
   /**
