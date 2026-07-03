@@ -42,9 +42,7 @@
       <tr *ngFor="let t of trades">
         <td>#{{ t.id }}</td>
         <td>
-          <span [title]="t.created_at | date:'yyyy/MM/dd'">
-            {{ formatMatchTime(t) !== '–' ? formatMatchTime(t) : (t.created_at | date:'MM/dd HH:mm:ss') }}
-          </span>
+          {{ formatMatchTime(t) }}
         </td>
         <td>{{ t.product_id || '–' }}</td>
         <td>
@@ -91,7 +89,7 @@
           {{ o.fill_status || '–' }}
         </td>
         <td>{{ o.fill_quantity ?? '–' }}</td>
-        <td>{{ o.updated_at ? (o.updated_at | date:'MM/dd HH:mm:ss') : '–' }}</td>
+        <td>{{ o.updated_at ? (o.updated_at | date:'yyyy/MM/dd HH:mm:ss') : '–' }}</td>
       </tr>
     </tbody>
   </table>

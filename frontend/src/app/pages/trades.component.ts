@@ -63,14 +63,16 @@ export class TradesComponent implements OnInit {
   }
 
   /**
-   * pfctrade match_time 格式：HHMMSSZZZ (9 位數字字串)
+   * pfctrade match_time 格式：HHMMSSZZZ (9 位數字字串，台灣當地時間)
    * 例："104508120" → "10:45:08"
-   * 若有 mdate (YYYYMMDD)，合併顯示 "MM/DD HH:MM:SS"
+   * 日期從 created_at (UTC) 轉換為台灣時間 (UTC+8) 取得
+   * 最終格式："yyyy/MM/dd HH:mm:ss" (台灣時區)
    */
   formatMatchTime(trade: TradeRecord): string {
     const raw = trade.match_time;
     const mdate = trade.mdate;
 
+    // 解析時間部分
     let timeStr = '';
     if (raw && /^\d{9}$/.test(raw)) {
       const h = raw.slice(0, 2);
@@ -81,10 +83,23 @@ export class TradesComponent implements OnInit {
       timeStr = raw;
     }
 
+    // mdate 有值則優先用 (YYYYMMDD)
     if (mdate && /^\d{8}$/.test(mdate)) {
+      const y  = mdate.slice(0, 4);
       const mo = mdate.slice(4, 6);
       const d  = mdate.slice(6, 8);
-      return timeStr ? `${mo}/${d} ${timeStr}` : `${mo}/${d}`;
+      return timeStr ? `${y}/${mo}/${d} ${timeStr}` : `${y}/${mo}/${d}`;
+    }
+
+    // 從 created_at 取台灣日期 (UTC+8)
+    if (trade.created_at && timeStr) {
+      const twDate = new Date(
+        new Date(trade.created_at).getTime() + 8 * 60 * 60 * 1000
+      );
+      const y  = twDate.getUTCFullYear();
+      const mo = String(twDate.getUTCMonth() + 1).padStart(2, '0');
+      const d  = String(twDate.getUTCDate()).padStart(2, '0');
+      return `${y}/${mo}/${d} ${timeStr}`;
     }
 
     return timeStr || '–';

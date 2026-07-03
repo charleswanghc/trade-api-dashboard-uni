@@ -93,7 +93,7 @@
           <span class="badge" [ngClass]="getOrderStateClass(order)">{{ getOrderStateLabel(order) }}</span>
         </div>
         <div style="color: var(--muted); font-size: 12px;">
-          {{ order.created_at }} · 單號 {{ order.order_id || '—' }}
+          {{ order.created_at | date:'yyyy/MM/dd HH:mm:ss' }} · 單號 {{ order.order_id || '—' }}
         </div>
         <div style="font-size: 12px; margin-top: 2px; word-break: break-word;"
           [style.color]="order.error_message ? '#e74c3c' : 'var(--muted)'">

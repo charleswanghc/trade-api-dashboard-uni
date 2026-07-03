@@ -16,8 +16,9 @@ COPY database.py .
 COPY models.py .
 COPY unitrade_client.py .
 
-# Copy certificates
-COPY certs/ /app/certs/
+# Copy certificate to working directory (/app/) — same level as scripts
+# pfctrade Unitrade SDK requires the cert to be in the program's working directory
+COPY certs/unitrade_cert.pfx /app/unitrade_cert.pfx
 
 # Expose port
 EXPOSE 8000
