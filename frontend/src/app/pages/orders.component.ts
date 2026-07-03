@@ -123,6 +123,81 @@ export class OrdersComponent implements OnInit {
     this.api.listOrders().subscribe((data) => (this.orders = data || []));
   }
 
+  // ── 四段式流程揭露 helpers ───────────────────────────────────────
+
+  getSourceLabel(order: OrderHistory): string {
+    switch (order.source) {
+      case 'signal':  return 'TradingView';
+      case 'manual':  return '手動下單';
+      case 'webhook': return 'Webhook';
+      case 'sync':    return '外部回補';
+      default:        return order.source ?? '—';
+    }
+  }
+  getSourceClass(order: OrderHistory): string {
+    if (order.source === 'signal')  return 'info';
+    if (order.source === 'manual')  return 'warning';
+    return '';
+  }
+
+  private _brokerResult(order: OrderHistory): { issend: boolean | null; errormsg: string } {
+    if (!order.order_result) return { issend: null, errormsg: order.error_message ?? '' };
+    try {
+      const r = JSON.parse(order.order_result);
+      return {
+        issend: typeof r.issend === 'boolean' ? r.issend : null,
+        errormsg: (r.errormsg || r.errorcode || '').trim(),
+      };
+    } catch { return { issend: null, errormsg: order.error_message ?? '' }; }
+  }
+
+  getBrokerClass(order: OrderHistory): string {
+    const { issend } = this._brokerResult(order);
+    if (issend === true)  return 'success';
+    if (issend === false) return 'error';
+    return order.error_message ? 'error' : 'warning';
+  }
+  getBrokerLabel(order: OrderHistory): string {
+    const { issend } = this._brokerResult(order);
+    if (issend === true)  return `已送出${order.order_id ? ' #' + order.order_id : ''}`;
+    if (issend === false) return '券商拒絕';
+    return order.error_message ? '連線失敗' : '等待中';
+  }
+  getBrokerDetail(order: OrderHistory): string {
+    const { issend, errormsg } = this._brokerResult(order);
+    if (issend === false) return errormsg || '不明原因';
+    return order.error_message ?? '';
+  }
+
+  getExchangeClass(order: OrderHistory): string {
+    const { isReject } = this.parseFillStatus(order.fill_status);
+    if (isReject) return 'error';
+    if (order.fill_status?.includes('完全成交') || order.status === 'filled') return 'success';
+    if (order.fill_status?.includes('成功')) return 'success';
+    if (order.fill_status?.includes('刪單') || order.fill_status?.includes('取消')) return 'warning';
+    const { issend } = this._brokerResult(order);
+    if (issend === true) return 'warning';
+    return '';
+  }
+  getExchangeLabel(order: OrderHistory): string {
+    const { isReject } = this.parseFillStatus(order.fill_status);
+    if (isReject) return '拒單';
+    if (!order.fill_status) return this._brokerResult(order).issend === true ? '等待回報' : '未送達';
+    if (order.fill_status.includes('完全成交')) return '完全成交';
+    if (order.fill_status.includes('部分')) return '部分成交';
+    if (order.fill_status.includes('刪單')) return '已刪單';
+    return order.fill_status.split(':')[0].trim() || order.fill_status;
+  }
+  getExchangeDetail(order: OrderHistory): string {
+    const { isReject, text } = this.parseFillStatus(order.fill_status);
+    if (isReject) return text;
+    if (order.fill_quantity && order.fill_quantity > 0) {
+      const p = order.fill_price ? ` @ ${order.fill_price}` : '';
+      return `成交 ${order.fill_quantity} 口${p}`;
+    }
+    return '';
+  }
+
   /** PSC 錯誤碼格式：「PSC0019:保證金不足  157291  0」，清理多餘空白後回傳 */
   private parseFillStatus(fill: string | undefined): { isReject: boolean; text: string } {
     if (!fill) return { isReject: false, text: '' };

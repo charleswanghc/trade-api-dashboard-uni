@@ -86,19 +86,57 @@
   <div class="card">
     <h2>最近訂單</h2>
     <div *ngIf="orders.length; else empty">
-      <div *ngFor="let order of orders" style="padding: 8px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.15);">
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+      <div *ngFor="let order of orders" class="order-flow-card">
+
+        <!-- 標頭：商品 / 方向 / 時間 -->
+        <div class="order-flow-header">
           <strong>{{ order.symbol }}</strong>
-          <span>/ {{ order.action }} / {{ order.quantity }} / {{ order.source }}</span>
-          <span class="badge" [ngClass]="getOrderStateClass(order)">{{ getOrderStateLabel(order) }}</span>
+          <span class="badge" [ngClass]="order.action === 'B' ? 'badge-buy' : 'badge-sell'">
+            {{ order.action === 'B' ? '買進' : '賣出' }}
+          </span>
+          <span style="font-size:13px">{{ order.quantity }} 口</span>
+          <span class="text-muted" style="font-size:11px;margin-left:auto">
+            {{ order.created_at | date:'MM/dd HH:mm:ss' }}
+          </span>
         </div>
-        <div style="color: var(--muted); font-size: 12px;">
-          {{ order.created_at | date:'yyyy/MM/dd HH:mm:ss' }} · 單號 {{ order.order_id || '—' }}
+
+        <!-- 四段流程 -->
+        <div class="order-flow-stages">
+          <!-- ① 來源 -->
+          <div class="flow-stage">
+            <div class="flow-stage-label">① 來源</div>
+            <span class="badge" [ngClass]="getSourceClass(order)">{{ getSourceLabel(order) }}</span>
+          </div>
+          <div class="flow-arrow">→</div>
+
+          <!-- ② 平台處理 -->
+          <div class="flow-stage">
+            <div class="flow-stage-label">② 平台</div>
+            <span class="badge success">已處理</span>
+          </div>
+          <div class="flow-arrow">→</div>
+
+          <!-- ③ 券商 API -->
+          <div class="flow-stage">
+            <div class="flow-stage-label">③ 券商API</div>
+            <span class="badge" [ngClass]="getBrokerClass(order)">{{ getBrokerLabel(order) }}</span>
+            <div *ngIf="getBrokerDetail(order)" class="flow-detail error-text">
+              {{ getBrokerDetail(order) }}
+            </div>
+          </div>
+          <div class="flow-arrow">→</div>
+
+          <!-- ④ 交易所回報 -->
+          <div class="flow-stage">
+            <div class="flow-stage-label">④ 交易所</div>
+            <span class="badge" [ngClass]="getExchangeClass(order)">{{ getExchangeLabel(order) }}</span>
+            <div *ngIf="getExchangeDetail(order)" class="flow-detail"
+              [class.error-text]="getExchangeClass(order) === 'error'">
+              {{ getExchangeDetail(order) }}
+            </div>
+          </div>
         </div>
-        <div style="font-size: 12px; margin-top: 2px; word-break: break-word;"
-          [style.color]="order.error_message ? '#e74c3c' : 'var(--muted)'">
-          {{ getOrderStateDetail(order) }}
-        </div>
+
       </div>
     </div>
     <ng-template #empty>尚無訂單。</ng-template>

@@ -906,7 +906,9 @@ def get_margin():
 
     resp = api.daccount.get_margin(actno, currency)
     if resp is None or not getattr(resp, "ok", False):
-        err = getattr(resp, "error", "unknown") if resp else "no response"
+        err = getattr(resp, "error", "") if resp else "no response"
+        if "查無資料" in str(err):
+            return []
         raise HTTPException(status_code=503, detail=f"保證金查詢失敗: {err}")
 
     # resp.data 可能是單一物件或 list，統一轉為 list
