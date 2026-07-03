@@ -972,7 +972,9 @@ def get_positions():
     # get_position 簽名：get_position(actno, groupid='', trader='')，無 currency 參數
     resp = api.daccount.get_position(actno)
     if resp is None or not getattr(resp, "ok", False):
-        err = getattr(resp, "error", "unknown") if resp else "no response"
+        err = getattr(resp, "error", "") if resp else "no response"
+        if "查無資料" in str(err):
+            return []
         raise HTTPException(status_code=503, detail=f"即時部位查詢失敗: {err}")
 
     raw = resp.data
@@ -1026,7 +1028,9 @@ def get_unliquidations():
 
     resp = api.daccount.get_unliquidation(actno, currency)
     if resp is None or not getattr(resp, "ok", False):
-        err = getattr(resp, "error", "unknown") if resp else "no response"
+        err = getattr(resp, "error", "") if resp else "no response"
+        if "查無資料" in str(err):
+            return []
         raise HTTPException(status_code=503, detail=f"未平倉查詢失敗: {err}")
 
     raw = resp.data
