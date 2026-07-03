@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Subscription, timer, of, forkJoin } from 'rxjs';
 import { switchMap, catchError } from 'rxjs/operators';
-import { ApiService, Margin } from '../services/api.service';
+import { ApiService, Margin, OrderHistory, SignalHistory } from '../services/api.service';
 
 const HEALTH_POLL_MS = 30_000;
 
@@ -20,8 +20,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   lastChecked: Date | null = null;
   strategyCount: number | null = null;
   todaySignals: number | null = null;
-  recentSignals: any[] = [];
+  recentSignals: SignalHistory[] = [];
+  recentOrders: OrderHistory[] = [];
   unitradeStatus: string | null = null;
+
+  private readonly FINAL_STATUSES = new Set(['filled', 'cancelled', 'failed']);
+  private orderPoll?: Subscription;
   margin: Margin | null = null;
   marginError = false;
   marginErrorMsg = '';
@@ -90,10 +94,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.todaySignals = 0;
       },
     });
+    this.api.listOrders().subscribe({
+      next: d => {
+        this.recentOrders = (d || []).slice(0, 5);
+        this.startOrderPolling();
+      },
+      error: () => (this.recentOrders = []),
+    });
+  }
+
+  /** 有非終態訂單時每 3 秒輪詢，直到全部終結或元件銷毀 */
+  private startOrderPolling(): void {
+    this.orderPoll?.unsubscribe();
+    if (!this.recentOrders.some(o => !this.FINAL_STATUSES.has(o.status))) return;
+    this.orderPoll = timer(3000, 3000).subscribe(() => {
+      this.api.listOrders().subscribe({
+        next: d => {
+          this.recentOrders = (d || []).slice(0, 5);
+          if (!this.recentOrders.some(o => !this.FINAL_STATUSES.has(o.status))) {
+            this.orderPoll?.unsubscribe();
+          }
+        },
+      });
+    });
   }
 
   ngOnDestroy(): void {
     this.healthPoll?.unsubscribe();
+    this.orderPoll?.unsubscribe();
   }
 
   loadMargin(): void {
@@ -128,5 +156,123 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (type?.includes('entry')) return 'success';
     if (type?.includes('exit')) return 'warning';
     return 'info';
+  }
+
+  // ── 訊號四段流程 helpers ───────────────────────────────────────
+  getSignalPlatformClass(signal: SignalHistory): string {
+    if (signal.status === 'processed' || signal.status === 'ok') return 'success';
+    if (signal.status === 'failed' || signal.status === 'error') return 'error';
+    if (signal.status === 'ignored') return 'warning';
+    return 'info';
+  }
+  getSignalPlatformLabel(signal: SignalHistory): string {
+    if (signal.status === 'processed' || signal.status === 'ok') return '已處理';
+    if (signal.status === 'failed' || signal.status === 'error') return '轉單失敗';
+    if (signal.status === 'ignored') return '已忽略';
+    return '處理中';
+  }
+  getSignalBrokerClass(signal: SignalHistory): string {
+    if (signal.status === 'ignored') return 'warning';
+    if (signal.order_id) return 'success';
+    if (signal.status === 'failed' || signal.status === 'error') return 'error';
+    return 'warning';
+  }
+  getSignalBrokerLabel(signal: SignalHistory): string {
+    if (signal.status === 'ignored') return '已忽略';
+    if (signal.order_id) return `已送出 #${signal.order_id}`;
+    if (signal.status === 'failed' || signal.status === 'error') return '轉單失敗';
+    return '等待中';
+  }
+  getSignalBrokerDetail(signal: SignalHistory): string {
+    return signal.error_message ?? '';
+  }
+  getSignalExchangeClass(signal: SignalHistory): string {
+    if (signal.order_id) return 'warning';
+    return '';
+  }
+  getSignalExchangeLabel(signal: SignalHistory): string {
+    if (signal.order_id) return '等待回報';
+    return '—';
+  }
+
+  // ── 訂單四段流程 helpers ───────────────────────────────────────
+  getOrderSourceLabel(order: OrderHistory): string {
+    switch (order.source) {
+      case 'signal':  return 'TradingView';
+      case 'manual':  return '手動下單';
+      case 'webhook': return 'Webhook';
+      case 'sync':    return '外部回補';
+      default:        return order.source ?? '—';
+    }
+  }
+  getOrderSourceClass(order: OrderHistory): string {
+    if (order.source === 'signal')  return 'info';
+    if (order.source === 'manual')  return 'warning';
+    return '';
+  }
+
+  private _orderBrokerResult(order: OrderHistory): { issend: boolean | null; errormsg: string } {
+    if (!order.order_result) return { issend: null, errormsg: order.error_message ?? '' };
+    try {
+      const r = JSON.parse(order.order_result);
+      return {
+        issend: typeof r.issend === 'boolean' ? r.issend : null,
+        errormsg: (r.errormsg || r.errorcode || '').trim(),
+      };
+    } catch { return { issend: null, errormsg: order.error_message ?? '' }; }
+  }
+
+  getOrderBrokerClass(order: OrderHistory): string {
+    const { issend } = this._orderBrokerResult(order);
+    if (issend === true)  return 'success';
+    if (issend === false) return 'error';
+    return order.error_message ? 'error' : 'warning';
+  }
+  getOrderBrokerLabel(order: OrderHistory): string {
+    const { issend } = this._orderBrokerResult(order);
+    if (issend === true)  return `已送出${order.order_id ? ' #' + order.order_id : ''}`;
+    if (issend === false) return '券商拒絕';
+    return order.error_message ? '連線失敗' : '等待中';
+  }
+  getOrderBrokerDetail(order: OrderHistory): string {
+    const { issend, errormsg } = this._orderBrokerResult(order);
+    if (issend === false) return errormsg || '不明原因';
+    return order.error_message ?? '';
+  }
+
+  private _parseFillStatus(fill: string | undefined): { isReject: boolean; text: string } {
+    if (!fill) return { isReject: false, text: '' };
+    const cleaned = fill.replace(/\s+/g, ' ').trim();
+    const isReject = /PSC\d+|拒絕|不足|保金|保證金不足/.test(cleaned);
+    return { isReject, text: cleaned };
+  }
+
+  getOrderExchangeClass(order: OrderHistory): string {
+    const { isReject } = this._parseFillStatus(order.fill_status);
+    if (isReject) return 'error';
+    if (order.fill_status?.includes('完全成交') || order.status === 'filled') return 'success';
+    if (order.fill_status?.includes('成功')) return 'success';
+    if (order.fill_status?.includes('刪單') || order.fill_status?.includes('取消')) return 'warning';
+    const { issend } = this._orderBrokerResult(order);
+    if (issend === true) return 'warning';
+    return '';
+  }
+  getOrderExchangeLabel(order: OrderHistory): string {
+    const { isReject } = this._parseFillStatus(order.fill_status);
+    if (isReject) return '拒單';
+    if (!order.fill_status) return this._orderBrokerResult(order).issend === true ? '等待回報' : '未送達';
+    if (order.fill_status.includes('完全成交')) return '完全成交';
+    if (order.fill_status.includes('部分')) return '部分成交';
+    if (order.fill_status.includes('刪單')) return '已刪單';
+    return order.fill_status.split(':')[0].trim() || order.fill_status;
+  }
+  getOrderExchangeDetail(order: OrderHistory): string {
+    const { isReject, text } = this._parseFillStatus(order.fill_status);
+    if (isReject) return text;
+    if (order.fill_quantity && order.fill_quantity > 0) {
+      const p = order.fill_price ? ` @ ${order.fill_price}` : '';
+      return `成交 ${order.fill_quantity} 口${p}`;
+    }
+    return '';
   }
 }
