@@ -123,16 +123,29 @@ export class OrdersComponent implements OnInit {
     this.api.listOrders().subscribe((data) => (this.orders = data || []));
   }
 
+  /** PSC 錯誤碼格式：「PSC0019:保證金不足  157291  0」，清理多餘空白後回傳 */
+  private parseFillStatus(fill: string | undefined): { isReject: boolean; text: string } {
+    if (!fill) return { isReject: false, text: '' };
+    const cleaned = fill.replace(/\s+/g, ' ').trim();
+    const isReject = /PSC\d+|拒絕|不足|保金|保證金不足/.test(cleaned);
+    return { isReject, text: cleaned };
+  }
+
   getOrderStateClass(order: OrderHistory): string {
     if (order.error_message || order.status === 'failed') return 'error';
-    if (order.fill_status?.includes('成功') || order.status === 'filled') return 'success';
+    const { isReject } = this.parseFillStatus(order.fill_status);
+    if (isReject) return 'error';
+    if (order.fill_status?.includes('完全成交') || order.status === 'filled') return 'success';
+    if (order.fill_status?.includes('成功') || order.fill_status?.includes('委託成功')) return 'success';
     if (order.status === 'submitted') return 'warning';
     return 'info';
   }
 
   getOrderStateLabel(order: OrderHistory): string {
     if (order.error_message || order.status === 'failed') return '送單失敗';
-    if (order.status === 'filled') return '已成交';
+    const { isReject } = this.parseFillStatus(order.fill_status);
+    if (isReject) return '交易所拒單';
+    if (order.status === 'filled' || order.fill_status?.includes('完全成交')) return '已成交';
     if (order.fill_status?.includes('成功')) return '委託成功';
     if (order.status === 'submitted') return '已送出';
     return order.status;
@@ -140,11 +153,13 @@ export class OrdersComponent implements OnInit {
 
   getOrderStateDetail(order: OrderHistory): string {
     if (order.error_message) return order.error_message;
+    const { isReject, text } = this.parseFillStatus(order.fill_status);
+    if (isReject) return text;  // 直接顯示完整拒單原因，如「PSC0019: 保證金不足 157291 0」
     if (order.fill_quantity && order.fill_quantity > 0) {
       const avgPrice = order.fill_price ? `，均價 ${order.fill_price}` : '';
       return `已成交 ${order.fill_quantity} 口${avgPrice}`;
     }
-    if (order.fill_status) return `${order.fill_status}；目前成交口數 ${order.fill_quantity ?? 0}`;
+    if (text) return `${text}；目前成交口數 ${order.fill_quantity ?? 0}`;
     if (order.status === 'submitted') return '委託已送至交易系統，等待成交或回報';
     return order.order_result || '—';
   }

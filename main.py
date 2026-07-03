@@ -909,8 +909,12 @@ def get_margin():
         err = getattr(resp, "error", "unknown") if resp else "no response"
         raise HTTPException(status_code=503, detail=f"保證金查詢失敗: {err}")
 
+    # resp.data 可能是單一物件或 list，統一轉為 list
+    raw = resp.data
+    items = raw if isinstance(raw, (list, tuple)) else ([raw] if raw is not None else [])
+
     result = []
-    for m in (resp.data or []):
+    for m in items:
         result.append({
             "actno":            _getattr2(m, "ACTNO"),
             "account_date":     _getattr2(m, "ACCOUNT_DATE"),
@@ -969,8 +973,11 @@ def get_positions():
         err = getattr(resp, "error", "unknown") if resp else "no response"
         raise HTTPException(status_code=503, detail=f"即時部位查詢失敗: {err}")
 
+    raw = resp.data
+    items = raw if isinstance(raw, (list, tuple)) else ([raw] if raw is not None else [])
+
     result = []
-    for p in (resp.data or []):
+    for p in items:
         result.append({
             "product":          _getattr2(p, "PRODUCT"),
             "product_id":       _getattr2(p, "PRODUCTID"),
@@ -1020,8 +1027,11 @@ def get_unliquidations():
         err = getattr(resp, "error", "unknown") if resp else "no response"
         raise HTTPException(status_code=503, detail=f"未平倉查詢失敗: {err}")
 
+    raw = resp.data
+    items = raw if isinstance(raw, (list, tuple)) else ([raw] if raw is not None else [])
+
     result = []
-    for u in (resp.data or []):
+    for u in items:
         result.append({
             "product_id":       _getattr2(u, "PRODUCTID"),
             "product_name":     _getattr2(u, "PRODUCT_NAME"),
