@@ -22,6 +22,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   todaySignals: number | null = null;
   recentSignals: SignalHistory[] = [];
   recentOrders: OrderHistory[] = [];
+  orderMap = new Map<string, OrderHistory>();
   unitradeStatus: string | null = null;
 
   private readonly FINAL_STATUSES = new Set(['filled', 'cancelled', 'failed']);
@@ -96,7 +97,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
     this.api.listOrders().subscribe({
       next: d => {
-        this.recentOrders = (d || []).slice(0, 5);
+        const all = d || [];
+        this.recentOrders = all.slice(0, 5);
+        this.orderMap = new Map(all.filter(o => o.order_id).map(o => [o.order_id!, o]));
         this.startOrderPolling();
       },
       error: () => (this.recentOrders = []),
@@ -110,7 +113,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.orderPoll = timer(3000, 3000).subscribe(() => {
       this.api.listOrders().subscribe({
         next: d => {
-          this.recentOrders = (d || []).slice(0, 5);
+          const all = d || [];
+          this.recentOrders = all.slice(0, 5);
+          this.orderMap = new Map(all.filter(o => o.order_id).map(o => [o.order_id!, o]));
           if (!this.recentOrders.some(o => !this.FINAL_STATUSES.has(o.status))) {
             this.orderPoll?.unsubscribe();
           }
@@ -173,6 +178,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
   getSignalBrokerClass(signal: SignalHistory): string {
     if (signal.status === 'ignored') return 'warning';
+    const order = signal.order_id ? this.orderMap.get(signal.order_id) : undefined;
+    if (order) return this.getOrderBrokerClass(order);
     if (signal.order_id) return 'success';
     if (signal.status === 'failed' || signal.status === 'error') return 'error';
     return 'warning';
@@ -184,15 +191,26 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return '等待中';
   }
   getSignalBrokerDetail(signal: SignalHistory): string {
+    const order = signal.order_id ? this.orderMap.get(signal.order_id) : undefined;
+    if (order) return this.getOrderBrokerDetail(order);
     return signal.error_message ?? '';
   }
   getSignalExchangeClass(signal: SignalHistory): string {
+    const order = signal.order_id ? this.orderMap.get(signal.order_id) : undefined;
+    if (order) return this.getOrderExchangeClass(order);
     if (signal.order_id) return 'warning';
     return '';
   }
   getSignalExchangeLabel(signal: SignalHistory): string {
+    const order = signal.order_id ? this.orderMap.get(signal.order_id) : undefined;
+    if (order) return this.getOrderExchangeLabel(order);
     if (signal.order_id) return '等待回報';
     return '—';
+  }
+  getSignalExchangeDetail(signal: SignalHistory): string {
+    const order = signal.order_id ? this.orderMap.get(signal.order_id) : undefined;
+    if (order) return this.getOrderExchangeDetail(order);
+    return '';
   }
 
   // ── 訂單四段流程 helpers ───────────────────────────────────────

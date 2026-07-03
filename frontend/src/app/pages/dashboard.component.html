@@ -234,6 +234,10 @@
         <div class="flow-stage">
           <div class="flow-stage-label">④ 交易所</div>
           <span class="badge" [ngClass]="getSignalExchangeClass(s)">{{ getSignalExchangeLabel(s) }}</span>
+          <div *ngIf="getSignalExchangeDetail(s)" class="flow-detail"
+            [class.error-text]="getSignalExchangeClass(s) === 'error'">
+            {{ getSignalExchangeDetail(s) }}
+          </div>
         </div>
       </div>
 
