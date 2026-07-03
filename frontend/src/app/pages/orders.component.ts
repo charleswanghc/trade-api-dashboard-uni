@@ -1,6 +1,7 @@
-﻿import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Subscription, timer } from 'rxjs';
 import { ApiService, OrderHistory } from '../services/api.service';
 
 @Component({
@@ -10,11 +11,14 @@ import { ApiService, OrderHistory } from '../services/api.service';
   templateUrl: './orders.component.html',
   styleUrl: './orders.component.scss',
 })
-export class OrdersComponent implements OnInit {
+export class OrdersComponent implements OnInit, OnDestroy {
   orders: OrderHistory[] = [];
   message = '';
   loading = false;
   productSuggestions: { code: string; label: string }[] = [];
+
+  private readonly FINAL_STATUSES = new Set(['filled', 'cancelled', 'failed']);
+  private orderPoll?: Subscription;
 
   // ─── 商品代碼查詢器 ───
   showLookup = false;
@@ -120,7 +124,30 @@ export class OrdersComponent implements OnInit {
   }
 
   loadOrders(): void {
-    this.api.listOrders().subscribe((data) => (this.orders = data || []));
+    this.api.listOrders().subscribe((data) => {
+      this.orders = data || [];
+      this.startOrderPolling();
+    });
+  }
+
+  /** 有非終態訂單時每 3 秒輪詢，直到全部終結或元件銷毀 */
+  private startOrderPolling(): void {
+    this.orderPoll?.unsubscribe();
+    if (!this.orders.some(o => !this.FINAL_STATUSES.has(o.status))) return;
+    this.orderPoll = timer(3000, 3000).subscribe(() => {
+      this.api.listOrders().subscribe({
+        next: data => {
+          this.orders = data || [];
+          if (!this.orders.some(o => !this.FINAL_STATUSES.has(o.status))) {
+            this.orderPoll?.unsubscribe();
+          }
+        },
+      });
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.orderPoll?.unsubscribe();
   }
 
   // ── 四段式流程揭露 helpers ───────────────────────────────────────
