@@ -99,7 +99,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: d => {
         const all = d || [];
         this.recentOrders = all.slice(0, 5);
-        this.orderMap = new Map(all.filter(o => o.order_id).map(o => [o.order_id!, o]));
+        // 最新訂單優先：all 已由新到舊排序，reverse 後最新的會覆蓋舊的，map 取最後元素
+        this.orderMap = new Map(
+          [...all].reverse().filter(o => o.order_id).map(o => [o.order_id!, o])
+        );
         this.startOrderPolling();
       },
       error: () => (this.recentOrders = []),
@@ -115,7 +118,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
         next: d => {
           const all = d || [];
           this.recentOrders = all.slice(0, 5);
-          this.orderMap = new Map(all.filter(o => o.order_id).map(o => [o.order_id!, o]));
+          this.orderMap = new Map(
+            [...all].reverse().filter(o => o.order_id).map(o => [o.order_id!, o])
+          );
           if (!this.recentOrders.some(o => !this.FINAL_STATUSES.has(o.status))) {
             this.orderPoll?.unsubscribe();
           }
@@ -270,6 +275,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (isReject) return 'error';
     if (order.fill_status?.includes('完全成交') || order.status === 'filled') return 'success';
     if (order.fill_status?.includes('成功')) return 'success';
+    if (order.fill_quantity && order.fill_quantity > 0) return 'success';
     if (order.fill_status?.includes('刪單') || order.fill_status?.includes('取消')) return 'warning';
     const { issend } = this._orderBrokerResult(order);
     if (issend === true) return 'warning';
@@ -278,6 +284,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   getOrderExchangeLabel(order: OrderHistory): string {
     const { isReject } = this._parseFillStatus(order.fill_status);
     if (isReject) return '拒單';
+    if (order.fill_status?.includes('完全成交') || order.status === 'filled') return '完全成交';
+    if (order.fill_status?.includes('成功')) return '委聆成功';
+    if (order.fill_quantity && order.fill_quantity > 0) return '已成交';
     if (!order.fill_status) return this._orderBrokerResult(order).issend === true ? '等待回報' : '未送達';
     if (order.fill_status.includes('完全成交')) return '完全成交';
     if (order.fill_status.includes('部分')) return '部分成交';
@@ -291,6 +300,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       const p = order.fill_price ? ` @ ${order.fill_price}` : '';
       return `成交 ${order.fill_quantity} 口${p}`;
     }
+    if (order.fill_status?.trim()) return order.fill_status.replace(/\s+/g, ' ').trim();
     return '';
   }
 }

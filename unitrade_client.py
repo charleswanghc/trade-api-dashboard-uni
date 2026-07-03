@@ -169,8 +169,16 @@ def _setup_order_callbacks(api: Unitrade) -> None:
                 return
             order = db.query(OrderHistory).filter(OrderHistory.order_id == seq).first()
             if order:
-                orderstatus = getattr(reply, "orderstatus", None)
-                order.fill_status = orderstatus
+                orderstatus = str(getattr(reply, "orderstatus", "") or "").strip()
+                statuscode  = str(getattr(reply, "statuscode",  "") or "").strip()
+                errormsg    = str(getattr(reply, "errormsg",    "") or "").strip()
+
+                # orderstatus 為空時，用 statuscode / errormsg 組合拒單資訊（如 PSC0019:保證金不足）
+                if not orderstatus and (statuscode or errormsg):
+                    parts = [p for p in [statuscode, errormsg] if p]
+                    orderstatus = ":".join(parts)
+
+                order.fill_status = orderstatus or None
                 # 同步邏輯狀態，但不允許回降（避免中間狀態蓋掉已成交/部分成交）
                 new_status = _orderstatus_to_db_status(orderstatus)
                 _FINALITY = {"pending": 0, "submitted": 1, "partial_filled": 2,
@@ -187,8 +195,8 @@ def _setup_order_callbacks(api: Unitrade) -> None:
                 order.updated_at = datetime.utcnow()
                 db.commit()
                 logger.info(
-                    "on_reply: seq=%s orderstatus=%s status=%s",
-                    seq, orderstatus, order.status,
+                    "on_reply: seq=%s orderstatus=%s statuscode=%s errormsg=%s status=%s",
+                    seq, orderstatus, statuscode, errormsg, order.status,
                 )
         except Exception as exc:
             logger.error("on_reply callback error: %s", exc)

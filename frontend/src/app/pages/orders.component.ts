@@ -201,6 +201,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (isReject) return 'error';
     if (order.fill_status?.includes('完全成交') || order.status === 'filled') return 'success';
     if (order.fill_status?.includes('成功')) return 'success';
+    if (order.fill_quantity && order.fill_quantity > 0) return 'success';
     if (order.fill_status?.includes('刪單') || order.fill_status?.includes('取消')) return 'warning';
     const { issend } = this._brokerResult(order);
     if (issend === true) return 'warning';
@@ -209,6 +210,9 @@ export class OrdersComponent implements OnInit, OnDestroy {
   getExchangeLabel(order: OrderHistory): string {
     const { isReject } = this.parseFillStatus(order.fill_status);
     if (isReject) return '拒單';
+    if (order.fill_status?.includes('完全成交') || order.status === 'filled') return '完全成交';
+    if (order.fill_status?.includes('成功')) return '委聆成功';
+    if (order.fill_quantity && order.fill_quantity > 0) return '已成交';
     if (!order.fill_status) return this._brokerResult(order).issend === true ? '等待回報' : '未送達';
     if (order.fill_status.includes('完全成交')) return '完全成交';
     if (order.fill_status.includes('部分')) return '部分成交';
@@ -222,6 +226,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
       const p = order.fill_price ? ` @ ${order.fill_price}` : '';
       return `成交 ${order.fill_quantity} 口${p}`;
     }
+    // fill_status 不為空且未被前面模式識別時，直接展示原始內容以展露所有交易所回報
+    if (order.fill_status?.trim()) return order.fill_status.replace(/\s+/g, ' ').trim();
     return '';
   }
 

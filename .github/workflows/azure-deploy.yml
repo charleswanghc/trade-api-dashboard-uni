@@ -14,7 +14,32 @@ env:
   STATIC_WEB_APP_NAME: trade-dashboard
 
 jobs:
+  # 偵測變更範圍，供後續 job 判斷是否需要執行
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - '*.py'
+              - 'requirements.txt'
+              - 'Dockerfile'
+              - 'db/**'
+              - 'nginx/**'
+              - 'certs/**'
+            frontend:
+              - 'frontend/**'
+
   build-and-deploy-backend:
+    needs: detect-changes
+    # 前端純前端改動時不重建後端，避免憑證被覆蓋
+    if: needs.detect-changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -46,6 +71,8 @@ jobs:
             --image ${{ env.ACR_NAME }}.azurecr.io/trade-api:${{ github.sha }}
 
   build-and-deploy-frontend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
