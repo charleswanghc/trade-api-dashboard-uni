@@ -220,7 +220,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (order.fill_status?.includes('完全成交') || order.status === 'filled') return '完全成交';
     if (order.fill_status?.includes('委託成功') || order.fill_status?.includes('成功')) return '委託成功';
     if (order.fill_quantity && order.fill_quantity > 0) return '已成交';
-    if (!order.fill_status) return this._brokerResult(order).issend === true ? '洗單中…' : '未送達';
+    if (!order.fill_status) {
+      if (this._brokerResult(order).issend !== true) return '未送達';
+      const minAgo = (Date.now() - new Date(order.created_at).getTime()) / 60000;
+      return minAgo > 10 ? '逾時未回報' : '洗單中…';
+    }
     if (order.fill_status.includes('完全成交')) return '完全成交';
     if (order.fill_status.includes('部分')) return '部分成交';
     if (order.fill_status.includes('刪單') || order.fill_status.includes('刷單')) return '已刪單';

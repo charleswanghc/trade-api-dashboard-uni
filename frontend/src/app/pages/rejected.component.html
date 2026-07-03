@@ -1,0 +1,68 @@
+<div class="card">
+  <div class="card-header">
+    <div class="card-title" style="color:#e74c3c">⚠ 拒單/失敗紀錄</div>
+    <button class="btn secondary" (click)="load()" style="font-size:12px;padding:5px 12px">↺ 重新整理</button>
+  </div>
+
+  <div *ngIf="loading" class="empty-state" style="padding:40px 20px">
+    <div style="font-size:13px;opacity:.5">載入中…</div>
+  </div>
+  <div *ngIf="error" class="empty-state" style="padding:40px 20px;color:#ef5350">{{ error }}</div>
+
+  <ng-container *ngIf="!loading && !error">
+    <div *ngIf="orders.length === 0" class="empty-state" style="padding:52px 20px">
+      <div style="font-size:52px;margin-bottom:14px;opacity:.15">✓</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">目前無拒單或失敗紀錄</div>
+    </div>
+
+    <div *ngFor="let o of orders" class="order-flow-card">
+      <!-- 標頭 -->
+      <div class="order-flow-header">
+        <strong>{{ o.symbol }}</strong>
+        <span class="badge" [ngClass]="o.action === 'B' ? 'badge-buy' : 'badge-sell'">
+          {{ o.action === 'B' ? '買進' : '賣出' }}
+        </span>
+        <span style="font-size:13px">{{ o.quantity }} 口</span>
+        <span class="badge" [ngClass]="getSourceClass(o)">{{ getSourceLabel(o) }}</span>
+        <span *ngIf="o.strategy" class="text-muted" style="font-size:11px">{{ o.strategy }}</span>
+        <span class="text-muted" style="font-size:11px;margin-left:auto">
+          {{ (o.created_at + 'Z') | date:'MM/dd HH:mm:ss' }}
+        </span>
+      </div>
+
+      <!-- 流程 -->
+      <div class="order-flow-stages">
+        <!-- ① 來源 -->
+        <div class="flow-stage">
+          <div class="flow-stage-label">① 來源</div>
+          <span class="badge" [ngClass]="getSourceClass(o)">{{ getSourceLabel(o) }}</span>
+        </div>
+        <div class="flow-arrow">→</div>
+
+        <!-- ② 平台 -->
+        <div class="flow-stage">
+          <div class="flow-stage-label">② 平台</div>
+          <span class="badge success">已處理</span>
+        </div>
+        <div class="flow-arrow">→</div>
+
+        <!-- ③ 券商API -->
+        <div class="flow-stage">
+          <div class="flow-stage-label">③ 券商API</div>
+          <span class="badge" [ngClass]="getBrokerClass(o)">{{ getBrokerLabel(o) }}</span>
+          <div *ngIf="getBrokerDetail(o)" class="flow-detail error-text">{{ getBrokerDetail(o) }}</div>
+        </div>
+        <div class="flow-arrow">→</div>
+
+        <!-- ④ 交易所回報 -->
+        <div class="flow-stage">
+          <div class="flow-stage-label">④ 交易所</div>
+          <span class="badge error">拒單</span>
+          <div class="flow-detail error-text" style="word-break:break-all">
+            {{ parseFill(o.fill_status) || o.error_message || '—' }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+</div>

@@ -310,7 +310,12 @@ def _sync_history(api: Unitrade, actno: str) -> dict:
                 except (ValueError, TypeError):
                     filled = None
 
-                order = db.query(OrderHistory).filter(OrderHistory.order_id == seq).first()
+                order = (
+                    db.query(OrderHistory)
+                    .filter(OrderHistory.order_id == seq)
+                    .order_by(OrderHistory.created_at.desc())
+                    .first()
+                )
                 if order:
                     # 更新已有記錄
                     order.fill_status = orderstatus

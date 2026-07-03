@@ -185,73 +185,10 @@
 
 </div>
 
-<!-- Recent Signals Flow Cards -->
-<div class="card">
-  <div class="card-header">
-    <div class="card-title">最近訊號記錄</div>
-    <a routerLink="/alerts" style="font-size: 12px; color: var(--primary)">查看全部 →</a>
-  </div>
-  <ng-container *ngIf="recentSignals.length > 0; else noSignals">
-    <div *ngFor="let s of recentSignals" class="order-flow-card">
-
-      <!-- 標頭：策略 / 訊號類型 / 商品 / 時間 -->
-      <div class="order-flow-header">
-        <strong>{{ s.strategy_name }}</strong>
-        <span class="badge" [ngClass]="getSignalClass(s.signal_type)">{{ s.signal_type }}</span>
-        <span style="font-size:13px">{{ s.actual_product || s.signal_product || '—' }}</span>
-        <span class="text-muted" style="font-size:11px;margin-left:auto">
-          {{ (s.created_at + 'Z') | date:'MM/dd HH:mm:ss' }}
-        </span>
-      </div>
-
-      <!-- 四段流程 -->
-      <div class="order-flow-stages">
-        <!-- ① 來源 -->
-        <div class="flow-stage">
-          <div class="flow-stage-label">① 來源</div>
-          <span class="badge info">TradingView</span>
-        </div>
-        <div class="flow-arrow">→</div>
-
-        <!-- ② 平台處理 -->
-        <div class="flow-stage">
-          <div class="flow-stage-label">② 平台</div>
-          <span class="badge" [ngClass]="getSignalPlatformClass(s)">{{ getSignalPlatformLabel(s) }}</span>
-        </div>
-        <div class="flow-arrow">→</div>
-
-        <!-- ③ 券商 API -->
-        <div class="flow-stage">
-          <div class="flow-stage-label">③ 券商API</div>
-          <span class="badge" [ngClass]="getSignalBrokerClass(s)">{{ getSignalBrokerLabel(s) }}</span>
-          <div *ngIf="getSignalBrokerDetail(s)" class="flow-detail error-text">
-            {{ getSignalBrokerDetail(s) }}
-          </div>
-        </div>
-        <div class="flow-arrow">→</div>
-
-        <!-- ④ 交易所回報 -->
-        <div class="flow-stage">
-          <div class="flow-stage-label">④ 交易所</div>
-          <span class="badge" [ngClass]="getSignalExchangeClass(s)">{{ getSignalExchangeLabel(s) }}</span>
-          <div *ngIf="getSignalExchangeDetail(s)" class="flow-detail"
-            [class.error-text]="getSignalExchangeClass(s) === 'error'">
-            {{ getSignalExchangeDetail(s) }}
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </ng-container>
-  <ng-template #noSignals>
-    <div class="empty-state">尚無訊號記錄</div>
-  </ng-template>
-</div>
-
 <!-- Recent Orders Flow Cards -->
 <div class="card" style="margin-top: 16px">
   <div class="card-header">
-    <div class="card-title">最近訂單</div>
+    <div class="card-title">最近訂單流程</div>
     <a routerLink="/orders" style="font-size: 12px; color: var(--primary)">查看全部 →</a>
   </div>
   <ng-container *ngIf="recentOrders.length > 0; else noOrders">

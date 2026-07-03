@@ -5,6 +5,7 @@ import { PositionsComponent } from './pages/positions.component';
 import { TradesComponent } from './pages/trades.component';
 import { AlertsComponent } from './pages/alerts.component';
 import { StrategiesComponent } from './pages/strategies.component';
+import { RejectedComponent } from './pages/rejected.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
@@ -13,5 +14,6 @@ export const routes: Routes = [
   { path: 'positions', component: PositionsComponent },
   { path: 'trades', component: TradesComponent },
   { path: 'alerts', component: AlertsComponent },
+  { path: 'rejected', component: RejectedComponent },
   { path: 'strategies', component: StrategiesComponent }
 ];
