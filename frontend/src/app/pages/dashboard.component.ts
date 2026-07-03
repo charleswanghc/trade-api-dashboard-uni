@@ -22,7 +22,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   todaySignals: number | null = null;
   recentSignals: SignalHistory[] = [];
   recentOrders: OrderHistory[] = [];
-  orderMap = new Map<string, OrderHistory>();
+  allOrders: OrderHistory[] = [];          // 全部訂單，供 signal 匹配使用
+  rejectedOrders: OrderHistory[] = [];    // 最近拒單/失敗單
+  orderMap = new Map<number, OrderHistory>(); // keyed by DB id
   unitradeStatus: string | null = null;
 
   private readonly FINAL_STATUSES = new Set(['filled', 'cancelled', 'failed']);
@@ -98,15 +100,30 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.api.listOrders().subscribe({
       next: d => {
         const all = d || [];
-        this.recentOrders = all.slice(0, 5);
-        // 最新訂單優先：all 已由新到舊排序，reverse 後最新的會覆蓋舊的，map 取最後元素
-        this.orderMap = new Map(
-          [...all].reverse().filter(o => o.order_id).map(o => [o.order_id!, o])
-        );
+        this.allOrders = all;
+        this.recentOrders = all.filter(o => o.source !== 'sync').slice(0, 5);
+        this.orderMap = new Map(all.map(o => [o.id, o]));
+        // 最近 3 筆拒單或失敗單（含交易所拒絕 PSC + 送單失敗）
+        this.rejectedOrders = all
+          .filter(o => this._parseFillStatus(o.fill_status).isReject || o.status === 'failed')
+          .slice(0, 3);
         this.startOrderPolling();
       },
       error: () => (this.recentOrders = []),
     });
+  }
+
+  /** 找訊號對應的委託：order_id 相同且建立時間最近者 */
+  private findOrderForSignal(signal: SignalHistory): OrderHistory | undefined {
+    if (!signal.order_id) return undefined;
+    const candidates = this.allOrders.filter(o => o.order_id === signal.order_id);
+    if (candidates.length === 0) return undefined;
+    if (candidates.length === 1) return candidates[0];
+    const t = new Date(signal.created_at).getTime();
+    return candidates.reduce((best, cur) =>
+      Math.abs(new Date(cur.created_at).getTime() - t) <
+      Math.abs(new Date(best.created_at).getTime() - t) ? cur : best
+    );
   }
 
   /** 有非終態訂單時每 3 秒輪詢，直到全部終結或元件銷毀 */
@@ -117,10 +134,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.api.listOrders().subscribe({
         next: d => {
           const all = d || [];
-          this.recentOrders = all.slice(0, 5);
-          this.orderMap = new Map(
-            [...all].reverse().filter(o => o.order_id).map(o => [o.order_id!, o])
-          );
+          this.allOrders = all;
+          this.recentOrders = all.filter(o => o.source !== 'sync').slice(0, 5);
+          this.orderMap = new Map(all.map(o => [o.id, o]));
+          this.rejectedOrders = all
+            .filter(o => this._parseFillStatus(o.fill_status).isReject || o.status === 'failed')
+            .slice(0, 3);
           if (!this.recentOrders.some(o => !this.FINAL_STATUSES.has(o.status))) {
             this.orderPoll?.unsubscribe();
           }
@@ -183,7 +202,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
   getSignalBrokerClass(signal: SignalHistory): string {
     if (signal.status === 'ignored') return 'warning';
-    const order = signal.order_id ? this.orderMap.get(signal.order_id) : undefined;
+    const order = this.findOrderForSignal(signal);
     if (order) return this.getOrderBrokerClass(order);
     if (signal.order_id) return 'success';
     if (signal.status === 'failed' || signal.status === 'error') return 'error';
@@ -196,24 +215,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return '等待中';
   }
   getSignalBrokerDetail(signal: SignalHistory): string {
-    const order = signal.order_id ? this.orderMap.get(signal.order_id) : undefined;
+    const order = this.findOrderForSignal(signal);
     if (order) return this.getOrderBrokerDetail(order);
     return signal.error_message ?? '';
   }
   getSignalExchangeClass(signal: SignalHistory): string {
-    const order = signal.order_id ? this.orderMap.get(signal.order_id) : undefined;
+    const order = this.findOrderForSignal(signal);
     if (order) return this.getOrderExchangeClass(order);
     if (signal.order_id) return 'warning';
     return '';
   }
   getSignalExchangeLabel(signal: SignalHistory): string {
-    const order = signal.order_id ? this.orderMap.get(signal.order_id) : undefined;
+    const order = this.findOrderForSignal(signal);
     if (order) return this.getOrderExchangeLabel(order);
     if (signal.order_id) return '等待回報';
     return '—';
   }
   getSignalExchangeDetail(signal: SignalHistory): string {
-    const order = signal.order_id ? this.orderMap.get(signal.order_id) : undefined;
+    const order = this.findOrderForSignal(signal);
     if (order) return this.getOrderExchangeDetail(order);
     return '';
   }

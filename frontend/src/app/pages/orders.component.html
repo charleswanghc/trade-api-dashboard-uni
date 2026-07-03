@@ -84,9 +84,17 @@
   </div>
 
   <div class="card">
-    <h2>最近訂單</h2>
-    <div *ngIf="orders.length; else empty">
-      <div *ngFor="let order of orders" class="order-flow-card">
+    <h2 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      最近訂單
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button type="button" class="btn" [class.secondary]="sourceFilter !== 'manual'"
+          style="font-size:11px;padding:3px 10px" (click)="sourceFilter='manual'">手動下單</button>
+        <button type="button" class="btn" [class.secondary]="sourceFilter !== 'all'"
+          style="font-size:11px;padding:3px 10px" (click)="sourceFilter='all'">全部來源</button>
+      </div>
+    </h2>
+    <div *ngIf="filteredOrders.length; else empty">
+      <div *ngFor="let order of filteredOrders" class="order-flow-card">
 
         <!-- 標頭：商品 / 方向 / 時間 -->
         <div class="order-flow-header">

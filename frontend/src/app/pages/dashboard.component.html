@@ -312,3 +312,37 @@
     <div class="empty-state">尚無訂單記錄</div>
   </ng-template>
 </div>
+
+<!-- 最近拒單/失敗（交易所或券商拒絕） -->
+<div class="card" *ngIf="rejectedOrders.length > 0" style="margin-top:16px; border-left: 3px solid #e74c3c">
+  <div class="card-header">
+    <div class="card-title" style="color:#e74c3c">⚠ 最近拒單/失敗</div>
+    <a routerLink="/orders" style="font-size:12px; color:var(--primary)">查看全部 →</a>
+  </div>
+  <div *ngFor="let order of rejectedOrders" class="order-flow-card">
+    <div class="order-flow-header">
+      <strong>{{ order.symbol }}</strong>
+      <span class="badge" [ngClass]="order.action === 'B' ? 'badge-buy' : 'badge-sell'">
+        {{ order.action === 'B' ? '買進' : '賣出' }}
+      </span>
+      <span style="font-size:13px">{{ order.quantity }} 口</span>
+      <span class="badge" [ngClass]="getOrderSourceClass(order)" style="font-size:11px">{{ getOrderSourceLabel(order) }}</span>
+      <span class="text-muted" style="font-size:11px;margin-left:auto">
+        {{ (order.created_at + 'Z') | date:'MM/dd HH:mm:ss' }}
+      </span>
+    </div>
+    <div class="order-flow-stages">
+      <div class="flow-stage">
+        <div class="flow-stage-label">③ 券商API</div>
+        <span class="badge" [ngClass]="getOrderBrokerClass(order)">{{ getOrderBrokerLabel(order) }}</span>
+        <div *ngIf="getOrderBrokerDetail(order)" class="flow-detail error-text">{{ getOrderBrokerDetail(order) }}</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-stage">
+        <div class="flow-stage-label">④ 交易所回報</div>
+        <span class="badge error">{{ getOrderExchangeLabel(order) }}</span>
+        <div *ngIf="getOrderExchangeDetail(order)" class="flow-detail error-text">{{ getOrderExchangeDetail(order) }}</div>
+      </div>
+    </div>
+  </div>
+</div>

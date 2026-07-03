@@ -13,6 +13,7 @@ import { ApiService, OrderHistory } from '../services/api.service';
 })
 export class OrdersComponent implements OnInit, OnDestroy {
   orders: OrderHistory[] = [];
+  sourceFilter: 'manual' | 'all' = 'manual';  // 手動下單頁預設只顯示手動單
   message = '';
   loading = false;
   productSuggestions: { code: string; label: string }[] = [];
@@ -128,6 +129,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.orders = data || [];
       this.startOrderPolling();
     });
+  }
+
+  get filteredOrders(): OrderHistory[] {
+    return this.sourceFilter === 'all'
+      ? this.orders
+      : this.orders.filter(o => o.source === 'manual' || o.source === 'webhook');
   }
 
   /** 有非終態訂單時每 3 秒輪詢，直到全部終結或元件銷毀 */
