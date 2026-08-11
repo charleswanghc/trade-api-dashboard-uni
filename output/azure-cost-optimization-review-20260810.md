@@ -70,7 +70,7 @@ ERROR: --max-replicas must be in range [1,1000]
 3. 停止前先對 App 與 DB 做唯讀 preflight；service principal 若缺 PostgreSQL 讀取權限，流程會保守中止而不停止 App。
 4. 各步驟可重複執行，並有 10 分鐘 timeout 與最終狀態驗證。
 5. `azure/login` 已由使用 Node 20 的 v1 更新為使用 Node 24 的 v3。
-6. 尚未 commit、push 或在 Azure 執行，因此目前線上服務完全未受影響。
+6. 2026-08-11 已提交並推送至 `codex/azure-cost-schedule-fix`，建立 Draft PR #1；分支上的無停機 `start` preflight 成功，確認 Container App 為 `Running`、PostgreSQL 為 `Ready`，stop 步驟未執行。
 
 ## 節省方案
 
@@ -95,7 +95,8 @@ ERROR: --max-replicas must be in range [1,1000]
 - 現行 API 唯讀驗證：health 正常、1 筆 strategy、scheduler running 且有 2 個 jobs。
 - GitHub Actions：檢查近期排程歷史與週五 stop job 失敗 log。
 - 本機驗證：4 個 Actions shell blocks 全數通過 `bash -n`；`git diff --check` 無錯。
+- 分支 preflight：GitHub Actions run `31446943319` 於 26 秒內成功完成，使用 Node 24-based `azure/login@v3`，最終狀態為 App `Running`、DB `Ready`。
 
 ## 執行邊界
 
-本次沒有刪除 ACR、repository、tag、資料庫或 Azure 資源，也沒有改動線上設定。下一個需明確核准的動作是 commit/push 排程修正，接著以 Actions log 與 Azure 狀態驗證第一次正式 stop/start。Container App rightsizing、GHCR 遷移與 ACR 清理均應分開核准與執行。
+本次沒有刪除 ACR、repository、tag、資料庫或 Azure 資源，也沒有執行 stop。排程修正目前位於 Draft PR #1，尚未合併到 `main`；下一個需明確核准的動作是合併 PR，並在既有週末維護窗口監看第一次正式 stop/start。Container App rightsizing、GHCR 遷移與 ACR 清理均應分開核准與執行。
