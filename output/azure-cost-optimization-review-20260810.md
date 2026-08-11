@@ -69,7 +69,7 @@ ERROR: --max-replicas must be in range [1,1000]
 2. 啟動時先等 PostgreSQL `Ready`，再啟動 App。
 3. 停止前先對 App 與 DB 做唯讀 preflight；service principal 若缺 PostgreSQL 讀取權限，流程會保守中止而不停止 App。
 4. 各步驟可重複執行，並有 10 分鐘 timeout 與最終狀態驗證。
-5. `azure/login` 已由出現 Node 20 淘汰警告的 v1 更新為 v2。
+5. `azure/login` 已由使用 Node 20 的 v1 更新為使用 Node 24 的 v3。
 6. 尚未 commit、push 或在 Azure 執行，因此目前線上服務完全未受影響。
 
 ## 節省方案
