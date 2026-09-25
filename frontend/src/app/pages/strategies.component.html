@@ -39,25 +39,43 @@
           <input
             type="text"
             [(ngModel)]="currentStrategy.source_product"
+            (ngModelChange)="onSourceProductChange($event)"
             name="source_product"
+            list="source-product-options"
+            autocomplete="off"
             required
-            placeholder="TXF（對應大台指）">
-          <small>TradingView 訊號中的商品代碼（僅供記錄，不影響實際下單）</small>
-          <ng-container *ngIf="currentStrategy.source_product">
-            <small *ngIf="suggestMxfBase(currentStrategy.source_product || '') as mxfBase" style="color:#22d3ee">
-              對應微台指基底代碼：<strong>{{ mxfBase }}</strong>
-              &nbsp;→請在「實際下單商品」內填 <strong>{{ mxfBase }}</strong> 並開啟自動換月
-            </small>
-          </ng-container>
+            placeholder="搜尋代碼或中文名稱（例：TXF）">
+          <datalist id="source-product-options">
+            <option *ngFor="let product of sourceProducts"
+              [value]="product.code"
+              [label]="product.code + '-' + product.name"></option>
+          </datalist>
+          <small>可搜尋主要商品；TradingView 訊號中的代碼僅供記錄，不影響實際下單。</small>
         </div>
         <div class="form-group">
           <label>實際下單商品 *</label>
-          <input
-            type="text"
+          <select
+            *ngIf="targetProducts.length; else customTargetProduct"
             [(ngModel)]="currentStrategy.target_product"
             name="target_product"
-            required
-            [placeholder]="currentStrategy.auto_rollover ? 'MXF (輸入基底代碼，自動補月份)' : 'MXFF6'">
+            required>
+            <option value="" disabled>請選擇實際下單商品</option>
+            <option *ngIf="currentStrategy.target_product && !targetIsListed"
+              [value]="currentStrategy.target_product">
+              {{ currentStrategy.target_product }}-既有商品代碼
+            </option>
+            <option *ngFor="let product of targetOptions" [value]="product.value">
+              {{ product.value }}-{{ product.name }}{{ product.contractMonth ? '（' + product.contractMonth + '）' : '' }}
+            </option>
+          </select>
+          <ng-template #customTargetProduct>
+            <input
+              type="text"
+              [(ngModel)]="currentStrategy.target_product"
+              name="target_product"
+              required
+              placeholder="請輸入商品代碼">
+          </ng-template>
           <ng-container *ngIf="currentStrategy.auto_rollover && currentStrategy.target_product">
             <small style="color:#4ade80">
               ✔ 目前近月合約：<strong>{{ getCurrentContract(currentStrategy.target_product || '') }}</strong>
@@ -78,6 +96,7 @@
             <input
               type="checkbox"
               [(ngModel)]="currentStrategy.auto_rollover"
+              (ngModelChange)="onAutoRolloverChange($event)"
               name="auto_rollover">
             <span>開啟自動換月（target_product 視為商品基底代碼，自動補近月套級）</span>
           </label>
