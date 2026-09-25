@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import threading
+import time
 from datetime import datetime
 from typing import Any, Optional
 
@@ -20,6 +21,9 @@ class UnitradeOrderError(RuntimeError):
 
 _client_lock = threading.Lock()
 _client: Optional[Unitrade] = None
+_last_login_error: Optional[str] = None
+_last_login_attempt_at = 0.0
+_LOGIN_RETRY_COOLDOWN_SECONDS = 300
 
 
 def _get_env(name: str, required: bool = True) -> Optional[str]:
@@ -29,15 +33,52 @@ def _get_env(name: str, required: bool = True) -> Optional[str]:
     return value
 
 
+def _sanitize_login_error(error: Any) -> str:
+    """Keep broker diagnostics useful without exposing configured credentials."""
+    message = str(error or "").strip() or "Unitrade 未提供登入失敗原因"
+    for name in (
+        "UNITRADE_PASSWORD",
+        "UNITRADE_CERT_PASSWORD",
+        "UNITRADE_ACCOUNT",
+        "UNITRADE_ACTNO",
+    ):
+        value = os.getenv(name)
+        if value:
+            message = message.replace(value, f"[{name}]")
+    return message[:500]
+
+
+def _close_failed_client(api: Unitrade) -> None:
+    try:
+        api.logout()
+    except Exception:
+        logger.debug("Failed to close rejected Unitrade session", exc_info=True)
+
+
+def _is_logged_in(api: Unitrade) -> bool:
+    return bool(getattr(api, "login_status_flag", False))
+
+
 def get_unitrade_client() -> Unitrade:
     """Get a logged-in Unitrade client (singleton)."""
-    global _client
-    if _client is not None:
+    global _client, _last_login_error, _last_login_attempt_at
+    if _client is not None and _is_logged_in(_client):
         return _client
 
     with _client_lock:
-        if _client is not None:
+        if _client is not None and _is_logged_in(_client):
             return _client
+
+        if _client is not None:
+            _close_failed_client(_client)
+            _client = None
+
+        elapsed = time.monotonic() - _last_login_attempt_at
+        if _last_login_error and elapsed < _LOGIN_RETRY_COOLDOWN_SECONDS:
+            remaining = max(1, int(_LOGIN_RETRY_COOLDOWN_SECONDS - elapsed))
+            raise UnitradeLoginError(
+                f"{_last_login_error}（為避免帳號鎖定，{remaining} 秒後再重試）"
+            )
 
         ws_url = _get_env("UNITRADE_WS_URL")
         account = _get_env("UNITRADE_ACCOUNT")
@@ -45,6 +86,7 @@ def get_unitrade_client() -> Unitrade:
         cert_file = _get_env("UNITRADE_CERT_FILE")
         cert_password = _get_env("UNITRADE_CERT_PASSWORD", required=False) or ""
 
+        _last_login_attempt_at = time.monotonic()
         try:
             api = Unitrade()
 
@@ -52,14 +94,30 @@ def get_unitrade_client() -> Unitrade:
             # 確保連線事件與委託回報在登入過程中不會被漏掉
             _setup_order_callbacks(api)
 
-            api.login(ws_url, account, password, cert_file, cert_password)
+            login_response = api.login(
+                ws_url, account, password, cert_file, cert_password
+            )
+            login_ok = bool(getattr(login_response, "ok", False))
+            if not login_ok or not _is_logged_in(api):
+                response_error = getattr(login_response, "error", None)
+                if login_ok and not response_error:
+                    response_error = "Unitrade 登入旗標仍為未登入"
+                _last_login_error = _sanitize_login_error(response_error)
+                _close_failed_client(api)
+                logger.error("Unitrade login rejected: %s", _last_login_error)
+                raise UnitradeLoginError(_last_login_error)
+
             _client = api
+            _last_login_error = None
             logger.info("Unitrade login succeeded")
 
             # 登入後取得可用交易帳號清單（用於診斷 actno 設定是否正確）
             try:
                 available_accounts = api.get_accounts()
-                logger.info("Unitrade available accounts: %s", available_accounts)
+                logger.info(
+                    "Unitrade available account count: %d",
+                    len(available_accounts or []),
+                )
             except Exception as _acc_exc:
                 logger.warning("get_accounts() failed: %s", _acc_exc)
 
@@ -70,10 +128,12 @@ def get_unitrade_client() -> Unitrade:
                 logger.info("Startup history sync stats: %s", stats)
 
             return api
+        except UnitradeLoginError:
+            raise
         except Exception as exc:  # Unitrade SDK raises generic exceptions
-            logger.exception("Unitrade login failed: %s", exc)
-            raise UnitradeLoginError(str(exc)) from exc
-
+            _last_login_error = _sanitize_login_error(exc)
+            logger.exception("Unitrade login failed: %s", _last_login_error)
+            raise UnitradeLoginError(_last_login_error) from exc
 
 def serialize_order_result(result: Any) -> str:
     """Serialize Unitrade order result into a JSON string."""
